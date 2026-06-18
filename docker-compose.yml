@@ -1,0 +1,49 @@
+services:
+  backend-go:
+    image: ghcr.io/automaat/doctorine-backend-go:latest
+    container_name: doctorine-backend-go
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://doctorine:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/doctorine}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3001}
+      - DOCTORINE_ADDR=:8000
+      - DOCTORINE_JWT_SECRET=${DOCTORINE_JWT_SECRET:?DOCTORINE_JWT_SECRET must be set}
+      - DOCTORINE_ADMIN_USERNAME=${DOCTORINE_ADMIN_USERNAME:-admin}
+      - DOCTORINE_ADMIN_PASSWORD=${DOCTORINE_ADMIN_PASSWORD:?DOCTORINE_ADMIN_PASSWORD must be set}
+      - DOCTORINE_COOKIE_SECURE=${DOCTORINE_COOKIE_SECURE:-false}
+      - DOCTORINE_UPLOAD_DIR=/data/uploads
+    ports:
+      - '8010:8000'
+    volumes:
+      - uploads-data:/data/uploads
+    restart: unless-stopped
+    depends_on:
+      - postgres
+
+  frontend:
+    image: ghcr.io/automaat/doctorine-frontend:latest
+    container_name: doctorine-frontend
+    ports:
+      - '3001:3000'
+    environment:
+      - PUBLIC_API_URL=http://backend-go:8000
+      - API_PROXY_TARGET=http://backend-go:8000
+      - ORIGIN=${ORIGIN:-http://localhost:3001}
+      - DOCTORINE_COOKIE_SECURE=${DOCTORINE_COOKIE_SECURE:-false}
+    restart: unless-stopped
+    depends_on:
+      - backend-go
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: doctorine-postgres
+    environment:
+      - POSTGRES_USER=doctorine
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - POSTGRES_DB=doctorine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  uploads-data:

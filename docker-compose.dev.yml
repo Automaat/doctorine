@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: doctorine-postgres
+    environment:
+      - POSTGRES_USER=doctorine
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=doctorine
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_HOST_PORT:-5434}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U doctorine']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend-go:
+    build:
+      context: ./backend-go
+    container_name: doctorine-backend-go
+    ports:
+      - '8010:8000'
+    environment:
+      - DATABASE_URL=postgresql://doctorine:${POSTGRES_PASSWORD:-password}@postgres:5432/doctorine
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5175,http://127.0.0.1:5175,http://localhost:3001,http://127.0.0.1:3001}
+      - DOCTORINE_ADDR=:8000
+      - DOCTORINE_JWT_SECRET=${DOCTORINE_JWT_SECRET:-dev-jwt-secret-change-me}
+      - DOCTORINE_ADMIN_USERNAME=${DOCTORINE_ADMIN_USERNAME:-admin}
+      - DOCTORINE_ADMIN_PASSWORD=${DOCTORINE_ADMIN_PASSWORD:-admin}
+      - DOCTORINE_COOKIE_SECURE=false
+      - DOCTORINE_UPLOAD_DIR=/data/uploads
+    volumes:
+      - uploads-data:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/api', 'healthcheck']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: doctorine-frontend
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - '5175:5173'
+    environment:
+      - PUBLIC_API_URL=http://backend-go:8000
+      - API_PROXY_TARGET=http://backend-go:8000
+      - DOCTORINE_COOKIE_SECURE=false
+    depends_on:
+      backend-go:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  uploads-data:

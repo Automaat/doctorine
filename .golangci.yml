@@ -1,0 +1,141 @@
+version: '2'
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  default: standard
+  enable:
+    - asasalint
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - intrange
+    - loggercheck
+    - makezero
+    - mirror
+    - musttag
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - nonamedreturns
+    - reassign
+    - recvcheck
+    - sloglint
+    - wastedassign
+    - dupword
+    - errname
+    - exptostd
+    - funlen
+    - gocheckcompilerdirectives
+    - gocritic
+    - goprintffuncname
+    - gosec
+    - misspell
+    - modernize
+    - nolintlint
+    - nosprintfhostport
+    - perfsprint
+    - predeclared
+    - testableexamples
+    - thelper
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - whitespace
+    - depguard
+    - gomodguard_v2
+
+  settings:
+    depguard:
+      rules:
+        non-test:
+          files:
+            - '!$test'
+          deny:
+            - pkg: math/rand$
+              desc: use math/rand/v2 instead
+            - pkg: io/ioutil
+              desc: use os/io instead
+        non-main:
+          files:
+            - '!**/main.go'
+          deny:
+            - pkg: log$
+              desc: use log/slog instead
+
+    errcheck:
+      check-type-assertions: true
+
+    funlen:
+      lines: 100
+      statements: 70
+
+    gosec:
+      excludes:
+        - G304
+        - G124
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+        - unusedwrite
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-no-explanation:
+        - funlen
+
+    perfsprint:
+      strconcat: false
+      error-format: false
+      errorf: false
+
+    sloglint:
+      no-mixed-args: true
+
+    misspell:
+      locale: US
+
+    gomodguard_v2:
+      blocked:
+        - module: github.com/pkg/errors
+          recommendations:
+            - errors
+          reason: stdlib errors covers wrapping since Go 1.13
+
+  exclusions:
+    warn-unused: true
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - linters:
+          - bodyclose
+          - dupword
+          - errcheck
+          - funlen
+          - gosec
+        path: _test\.go
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/Automaat/doctorine/backend-go)
+      custom-order: true

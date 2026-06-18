@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+@import '@skeletonlabs/skeleton';
+@import '@skeletonlabs/skeleton/themes/rose';
+
+@source '../node_modules/@skeletonlabs/skeleton-svelte/dist';
+
+html,
+body {
+	overflow-x: hidden;
+	color-scheme: light;
+	background: var(--color-surface-50);
+}
+
+:root {
+	--radius-1: 0.25rem;
+	--radius-2: 0.375rem;
+	--radius-3: 0.5rem;
+	--tap-target-min: 44px;
+}
+
+.page-title {
+	font-size: 1.5rem;
+	line-height: 2rem;
+	font-weight: 700;
+}
+
+.section-title {
+	font-size: 1rem;
+	line-height: 1.5rem;
+	font-weight: 700;
+}
+
+.metric-card {
+	border: 1px solid var(--color-surface-200);
+	border-radius: var(--radius-3);
+	background: white;
+	padding: 1rem;
+	box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.data-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+}
+
+.data-table th,
+.data-table td {
+	border-bottom: 1px solid var(--color-surface-200);
+	padding: 0.75rem;
+	text-align: left;
+	vertical-align: top;
+}
+
+.data-table th {
+	color: var(--color-surface-700);
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+	.table-cards :is(table, tbody, tr, td) {
+		display: block;
+	}
+
+	.table-cards thead {
+		display: none;
+	}
+
+	.table-cards tr {
+		border: 1px solid var(--color-surface-200);
+		border-radius: var(--radius-3);
+		margin-block-end: 0.75rem;
+		padding: 0.5rem 0.75rem;
+	}
+
+	.table-cards td {
+		border: 0;
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.35rem 0;
+		text-align: right;
+	}
+
+	.table-cards td[data-label]::before {
+		content: attr(data-label);
+		color: var(--color-surface-700);
+		font-weight: 700;
+		text-align: left;
+	}
+}
