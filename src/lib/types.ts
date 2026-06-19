@@ -44,6 +44,8 @@ export interface Examination {
 export interface ExaminationResult {
 	id: number;
 	examination_id: number;
+	definition_id: number | null;
+	definition: ResultDefinition | null;
 	test_key: string;
 	name: string;
 	value_text: string | null;
@@ -54,6 +56,18 @@ export interface ExaminationResult {
 	reference_max: number | null;
 	flag: string | null;
 	display_order: number;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface ResultDefinition {
+	id: number;
+	test_key: string;
+	name: string;
+	unit: string | null;
+	reference_min: number | null;
+	reference_max: number | null;
+	category: string;
 	created_at: string;
 	updated_at: string;
 }

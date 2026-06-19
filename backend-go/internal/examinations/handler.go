@@ -1,6 +1,7 @@
 package examinations
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -35,6 +36,7 @@ type createRequest struct {
 }
 
 type resultRequest struct {
+	DefinitionID *int     `json:"definition_id"`
 	TestKey      string   `json:"test_key"`
 	Name         string   `json:"name"`
 	ValueText    *string  `json:"value_text"`
@@ -71,6 +73,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.store.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, ErrResultDefinitionNotFound) {
+			httputil.WriteDetailError(w, http.StatusUnprocessableEntity, "Result definition not found")
+			return
+		}
 		h.logger.Error("create examination", "err", err)
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
@@ -121,6 +127,9 @@ func validateResults(req []resultRequest) ([]ResultParams, string) {
 	results := make([]ResultParams, 0, len(req))
 	seen := map[string]bool{}
 	for i, item := range req {
+		if item.DefinitionID != nil && *item.DefinitionID <= 0 {
+			return nil, "Result definition_id must be positive"
+		}
 		key := healthstatus.CleanString(item.TestKey)
 		if key == "" {
 			return nil, "Result test_key is required"
@@ -152,6 +161,7 @@ func validateResults(req []resultRequest) ([]ResultParams, string) {
 			order = i + 1
 		}
 		results = append(results, ResultParams{
+			DefinitionID: item.DefinitionID,
 			TestKey:      key,
 			Name:         name,
 			ValueText:    valueText,

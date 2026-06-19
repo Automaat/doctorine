@@ -64,8 +64,10 @@ CREATE TABLE IF NOT EXISTS examination_results (
 	CONSTRAINT examination_results_unique_key UNIQUE (examination_id, test_key)
 );
 
-CREATE INDEX IF NOT EXISTS ix_examination_results_test_key ON examination_results (test_key, examination_id);
-CREATE INDEX IF NOT EXISTS ix_examination_results_examination_id ON examination_results (examination_id);
+CREATE INDEX IF NOT EXISTS ix_examination_results_test_key
+	ON examination_results (test_key, examination_id);
+CREATE INDEX IF NOT EXISTS ix_examination_results_examination_id
+	ON examination_results (examination_id);
 
 CREATE TABLE IF NOT EXISTS documents (
 	id serial PRIMARY KEY,
@@ -87,3 +89,11 @@ CREATE INDEX IF NOT EXISTS ix_documents_created_at ON documents (created_at DESC
 CREATE INDEX IF NOT EXISTS ix_documents_issued_at ON documents (issued_at DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS ix_documents_illness_id ON documents (illness_id);
 CREATE INDEX IF NOT EXISTS ix_documents_examination_id ON documents (examination_id);
+
+---- create above / drop below ----
+
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS examination_results;
+DROP TABLE IF EXISTS examinations;
+DROP TABLE IF EXISTS illnesses;
+DROP TABLE IF EXISTS users;

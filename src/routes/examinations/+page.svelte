@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { formatDate } from '$lib/format';
-	import type { ExaminationResult } from '$lib/types';
+	import type { ExaminationResult, ResultDefinition } from '$lib/types';
 	import { Plus, Trash2 } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
 	type ResultDraft = {
 		id: number;
+		definitionID: number | null;
 		testKey: string;
 		name: string;
 		value: string;
@@ -17,6 +18,7 @@
 	};
 
 	type ResultPayload = {
+		definition_id: number | null;
 		test_key: string;
 		name: string;
 		value_text: string | null;
@@ -34,7 +36,7 @@
 	let resultDrafts = $state<ResultDraft[]>([]);
 	let nextResultID = 1;
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
-	const unitOptions = [
+	const fallbackUnitOptions = [
 		'%',
 		'g/dl',
 		'fl',
@@ -63,6 +65,7 @@
 		nextResultID += 1;
 		return {
 			id,
+			definitionID: null,
 			testKey: '',
 			name: '',
 			value: '',
@@ -84,6 +87,80 @@
 	function resetResults() {
 		resultDrafts = [];
 		nextResultID = 1;
+	}
+
+	function definitionOptions(): ResultDefinition[] {
+		const byKey = new Map<string, ResultDefinition>();
+		for (const examination of data.examinations) {
+			for (const result of examination.results) {
+				const definition =
+					result.definition ??
+					(result.definition_id === null
+						? null
+						: {
+								id: result.definition_id,
+								test_key: result.test_key,
+								name: result.name,
+								unit: result.unit,
+								reference_min: result.reference_min,
+								reference_max: result.reference_max,
+								category: 'laboratory',
+								created_at: result.created_at,
+								updated_at: result.updated_at
+							});
+				if (definition !== null) byKey.set(definition.test_key, definition);
+			}
+		}
+		return [...byKey.values()].sort((left, right) =>
+			left.name.localeCompare(right.name, 'pl', { sensitivity: 'base' })
+		);
+	}
+
+	function unitOptions(): string[] {
+		const units = new Set(fallbackUnitOptions);
+		for (const definition of definitionOptions()) {
+			if (definition.unit) units.add(definition.unit);
+		}
+		return [...units].sort((left, right) => left.localeCompare(right, 'pl'));
+	}
+
+	function draftNumber(value: number | null): string {
+		return value === null ? '' : String(value);
+	}
+
+	function findDefinition(raw: string): ResultDefinition | null {
+		const cleaned = raw.trim().toLowerCase();
+		if (cleaned === '') return null;
+		return (
+			definitionOptions().find(
+				(definition) =>
+					definition.name.toLowerCase() === cleaned || definition.test_key.toLowerCase() === cleaned
+			) ?? null
+		);
+	}
+
+	function definitionLabel(definition: ResultDefinition): string {
+		return definition.unit ? `${definition.test_key} (${definition.unit})` : definition.test_key;
+	}
+
+	function syncDefinition(result: ResultDraft) {
+		const definition = findDefinition(result.name);
+		if (definition === null) {
+			result.definitionID = null;
+			result.testKey = '';
+			return;
+		}
+		result.definitionID = definition.id;
+		result.testKey = definition.test_key;
+		result.name = definition.name;
+		result.unit = definition.unit ?? '';
+		result.referenceMin = draftNumber(definition.reference_min);
+		result.referenceMax = draftNumber(definition.reference_max);
+	}
+
+	function syncDefinitionInput(result: ResultDraft, event: Event) {
+		result.name = (event.currentTarget as HTMLInputElement).value;
+		syncDefinition(result);
 	}
 
 	function parseOptionalNumber(raw: string): number | null {
@@ -150,6 +227,7 @@
 				return { results: [], detail: 'Result maximum must be numeric' };
 			}
 			results.push({
+				definition_id: draft.definitionID,
 				test_key: testKey,
 				name,
 				value_text: rawValue,
@@ -294,21 +372,24 @@
 				</button>
 			</div>
 			{#if resultDrafts.length > 0}
+				<datalist id="result-definition-list">
+					{#each definitionOptions() as definition}
+						<option value={definition.name} label={definitionLabel(definition)}></option>
+					{/each}
+				</datalist>
 				<div class="space-y-3">
 					{#each resultDrafts as result}
 						<div class="grid gap-3 border-t border-surface-200 pt-3 md:grid-cols-12">
-							<label class="label md:col-span-2">
-								<span class="text-sm font-semibold">Key</span>
+							<label class="label md:col-span-4">
+								<span class="text-sm font-semibold">Result</span>
 								<input
-									bind:value={result.testKey}
+									value={result.name}
 									class="input"
-									maxlength="120"
-									placeholder="ast"
+									list="result-definition-list"
+									maxlength="200"
+									placeholder="Start typing"
+									oninput={(event) => syncDefinitionInput(result, event)}
 								/>
-							</label>
-							<label class="label md:col-span-3">
-								<span class="text-sm font-semibold">Name</span>
-								<input bind:value={result.name} class="input" maxlength="200" placeholder="AST" />
 							</label>
 							<label class="label md:col-span-2">
 								<span class="text-sm font-semibold">Value</span>
@@ -328,7 +409,7 @@
 								<span class="text-sm font-semibold">Unit</span>
 								<select bind:value={result.unit} class="select">
 									<option value="">None</option>
-									{#each unitOptions as unit}
+									{#each unitOptions() as unit}
 										<option value={unit}>{unit}</option>
 									{/each}
 								</select>

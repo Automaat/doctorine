@@ -45,8 +45,9 @@ uploads/
 *.png
 *.heic
 
-# Embedded schema source
-!backend-go/internal/db/schema.sql
+# Embedded schema migrations
+!backend-go/internal/db/migrations/
+!backend-go/internal/db/migrations/*.sql
 
 # Testing
 coverage
