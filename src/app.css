@@ -107,6 +107,36 @@ body {
 	background: #dc2626;
 }
 
+.reminder-status {
+	border-radius: var(--radius-1);
+	display: inline-flex;
+	font-size: 0.75rem;
+	font-weight: 700;
+	line-height: 1;
+	padding: 0.3rem 0.45rem;
+	white-space: nowrap;
+}
+
+.reminder-status-due {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.reminder-status-soon {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.reminder-status-ok {
+	background: color-mix(in srgb, var(--color-primary-500) 12%, white);
+	color: var(--color-primary-700);
+}
+
+.reminder-status-missing {
+	background: var(--color-surface-100);
+	color: var(--color-surface-700);
+}
+
 .data-table {
 	width: 100%;
 	border-collapse: separate;

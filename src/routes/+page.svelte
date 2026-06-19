@@ -4,6 +4,7 @@
 	import {
 		Activity,
 		AlertTriangle,
+		CalendarCheck,
 		CalendarDays,
 		FileText,
 		Gauge,
@@ -39,6 +40,21 @@
 		max: number;
 	};
 
+	type ReminderRule = {
+		label: string;
+		testKeys: string[];
+		cadenceMonths: number;
+		reason: string;
+	};
+
+	type ReminderItem = ReminderRule & {
+		lastDate: string | null;
+		dueDate: string | null;
+		daysRemaining: number | null;
+		href: string | null;
+		status: 'missing' | 'due' | 'soon' | 'ok';
+	};
+
 	const chartWidth = 360;
 	const chartHeight = 150;
 	const chartPaddingX = 24;
@@ -52,7 +68,40 @@
 		{ key: 'kreatynina', label: 'Creatinine' },
 		{ key: 'hemoglobina', label: 'Hemoglobin' }
 	];
+	const reminderRules: ReminderRule[] = [
+		{
+			label: 'TSH',
+			testKeys: ['tsh'],
+			cadenceMonths: 12,
+			reason: 'Niedoczynność tarczycy'
+		},
+		{
+			label: 'Vitamin B12',
+			testKeys: ['witamina_b12'],
+			cadenceMonths: 12,
+			reason: 'Vegetarian diet'
+		},
+		{
+			label: 'Ferritin',
+			testKeys: ['ferrytyna'],
+			cadenceMonths: 12,
+			reason: 'Iron stores'
+		},
+		{
+			label: 'Blood count',
+			testKeys: ['hemoglobina', 'erytrocyty', 'hematokryt', 'leukocyty'],
+			cadenceMonths: 12,
+			reason: 'CBC baseline'
+		},
+		{
+			label: 'Vitamin D',
+			testKeys: ['witamina_d_25_oh'],
+			cadenceMonths: 12,
+			reason: 'Vegetarian diet'
+		}
+	];
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
+	const todayDate = isoDate(new Date());
 
 	let { data }: { data: PageData } = $props();
 
@@ -123,6 +172,7 @@
 			.sort((left, right) => right.examination.exam_date.localeCompare(left.examination.exam_date))
 	);
 	const flaggedByTest = $derived.by(() => buildFlaggedByTest(recentFlaggedRows));
+	const reminders = $derived.by(() => buildReminders());
 	const latestResults = $derived.by(() =>
 		rows
 			.filter((row) => row.result.value_numeric !== null)
@@ -150,6 +200,77 @@
 			return 'H';
 		}
 		return null;
+	}
+
+	function isoDate(date: Date): string {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
+	}
+
+	function addMonths(date: string, months: number): string {
+		const [year, month, day] = date.split('-').map(Number);
+		const target = new Date(Date.UTC(year, month - 1 + months, day));
+		if (target.getUTCDate() !== day) target.setUTCDate(0);
+		return [
+			target.getUTCFullYear(),
+			String(target.getUTCMonth() + 1).padStart(2, '0'),
+			String(target.getUTCDate()).padStart(2, '0')
+		].join('-');
+	}
+
+	function daysBetween(start: string, end: string): number {
+		const startDate = new Date(`${start}T00:00:00Z`);
+		const endDate = new Date(`${end}T00:00:00Z`);
+		return Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000);
+	}
+
+	function reminderStatus(
+		lastDate: string | null,
+		daysRemaining: number | null
+	): ReminderItem['status'] {
+		if (lastDate === null || daysRemaining === null) return 'missing';
+		if (daysRemaining < 0) return 'due';
+		if (daysRemaining <= 90) return 'soon';
+		return 'ok';
+	}
+
+	function buildReminders(): ReminderItem[] {
+		const statusOrder = { due: 0, missing: 1, soon: 2, ok: 3 };
+		return reminderRules
+			.map((rule) => {
+				const latest = rows
+					.filter((row) => rule.testKeys.includes(row.result.test_key))
+					.sort((left, right) =>
+						right.examination.exam_date.localeCompare(left.examination.exam_date)
+					)[0];
+				const lastDate = latest?.examination.exam_date ?? null;
+				const dueDate = lastDate === null ? null : addMonths(lastDate, rule.cadenceMonths);
+				const daysRemaining = dueDate === null ? null : daysBetween(todayDate, dueDate);
+				return {
+					...rule,
+					lastDate,
+					dueDate,
+					daysRemaining,
+					href: latest === undefined ? null : `/examinations/${latest.examination.id}`,
+					status: reminderStatus(lastDate, daysRemaining)
+				};
+			})
+			.sort(
+				(left, right) =>
+					statusOrder[left.status] - statusOrder[right.status] ||
+					(left.dueDate ?? '9999-12-31').localeCompare(right.dueDate ?? '9999-12-31')
+			);
+	}
+
+	function reminderStatusLabel(reminder: ReminderItem): string {
+		if (reminder.status === 'missing') return 'Missing';
+		if (reminder.daysRemaining === null) return 'Missing';
+		if (reminder.daysRemaining < 0) return `${Math.abs(reminder.daysRemaining)}d overdue`;
+		if (reminder.daysRemaining === 0) return 'Due today';
+		if (reminder.daysRemaining <= 90) return `Due in ${reminder.daysRemaining}d`;
+		return 'Scheduled';
 	}
 
 	function lastYearCutoffDate(): string {
@@ -412,6 +533,49 @@
 		</section>
 
 		<aside class="space-y-4">
+			<section class="dashboard-panel">
+				<div class="mb-3 flex items-center justify-between gap-3">
+					<div>
+						<h2 class="section-title">Exam reminders</h2>
+						<div class="text-xs text-surface-600">TSH + vegetarian labs</div>
+					</div>
+					<CalendarCheck class="text-surface-500" size={18} />
+				</div>
+				<div class="divide-y divide-surface-200">
+					{#each reminders as reminder}
+						<div class="grid gap-2 py-3">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									{#if reminder.href}
+										<a href={reminder.href} class="font-semibold hover:underline"
+											>{reminder.label}</a
+										>
+									{:else}
+										<div class="font-semibold">{reminder.label}</div>
+									{/if}
+									<div class="text-xs text-surface-600">
+										Every {reminder.cadenceMonths} months · {reminder.reason}
+									</div>
+								</div>
+								<span class={['reminder-status', `reminder-status-${reminder.status}`]}>
+									{reminderStatusLabel(reminder)}
+								</span>
+							</div>
+							<div class="grid grid-cols-2 gap-2 text-xs text-surface-700">
+								<div>
+									<span class="font-semibold">Last</span>
+									<span>{formatDate(reminder.lastDate)}</span>
+								</div>
+								<div>
+									<span class="font-semibold">Due</span>
+									<span>{formatDate(reminder.dueDate)}</span>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</section>
+
 			<section class="dashboard-panel">
 				<div class="mb-3 flex items-center justify-between gap-3">
 					<h2 class="section-title">Exam activity</h2>
