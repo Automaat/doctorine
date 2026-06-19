@@ -503,8 +503,8 @@
 		</div>
 	</form>
 
-	<div class="table-cards overflow-hidden rounded-md border border-surface-200 bg-white">
-		<table class="data-table">
+	<div class="table-cards overflow-x-auto rounded-md border border-surface-200 bg-white">
+		<table class="data-table md:min-w-[56rem]">
 			<thead>
 				<tr>
 					<th>Exam</th>
@@ -564,7 +564,7 @@
 							<td data-label="Date">{formatDate(examination.exam_date)}</td>
 							<td data-label="Status">{examination.result_status}</td>
 							<td data-label="Facility">{examination.facility ?? '-'}</td>
-							<td>
+							<td data-label="Actions">
 								<div class="flex justify-end">
 									<button
 										type="button"
