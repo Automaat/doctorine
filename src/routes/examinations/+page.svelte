@@ -34,6 +34,7 @@
 	let error = $state('');
 	let saving = $state(false);
 	let resultDrafts = $state<ResultDraft[]>([]);
+	let activeResultID = $state<number | null>(null);
 	let nextResultID = 1;
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
 	const fallbackUnitOptions = [
@@ -143,13 +144,27 @@
 		return definition.unit ? `${definition.test_key} (${definition.unit})` : definition.test_key;
 	}
 
-	function syncDefinition(result: ResultDraft) {
-		const definition = findDefinition(result.name);
-		if (definition === null) {
-			result.definitionID = null;
-			result.testKey = '';
-			return;
-		}
+	function definitionRange(definition: ResultDefinition): string | null {
+		if (definition.reference_min === null && definition.reference_max === null) return null;
+		if (definition.reference_min === null) return `<= ${draftNumber(definition.reference_max)}`;
+		if (definition.reference_max === null) return `>= ${draftNumber(definition.reference_min)}`;
+		return `${draftNumber(definition.reference_min)}-${draftNumber(definition.reference_max)}`;
+	}
+
+	function filteredDefinitions(result: ResultDraft): ResultDefinition[] {
+		const cleaned = result.name.trim().toLowerCase();
+		const options = definitionOptions();
+		if (cleaned === '') return options.slice(0, 8);
+		return options
+			.filter(
+				(definition) =>
+					definition.name.toLowerCase().includes(cleaned) ||
+					definition.test_key.toLowerCase().includes(cleaned)
+			)
+			.slice(0, 8);
+	}
+
+	function applyDefinition(result: ResultDraft, definition: ResultDefinition) {
 		result.definitionID = definition.id;
 		result.testKey = definition.test_key;
 		result.name = definition.name;
@@ -158,9 +173,48 @@
 		result.referenceMax = draftNumber(definition.reference_max);
 	}
 
+	function selectDefinition(result: ResultDraft, definition: ResultDefinition, event?: Event) {
+		event?.preventDefault();
+		applyDefinition(result, definition);
+		activeResultID = null;
+	}
+
+	function syncDefinition(result: ResultDraft) {
+		const definition = findDefinition(result.name);
+		if (definition === null) {
+			result.definitionID = null;
+			result.testKey = '';
+			return;
+		}
+		applyDefinition(result, definition);
+	}
+
 	function syncDefinitionInput(result: ResultDraft, event: Event) {
 		result.name = (event.currentTarget as HTMLInputElement).value;
 		syncDefinition(result);
+		activeResultID = result.id;
+	}
+
+	function closeDefinitionMenu() {
+		setTimeout(() => {
+			activeResultID = null;
+		}, 120);
+	}
+
+	function handleDefinitionKeydown(result: ResultDraft, event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			activeResultID = null;
+			return;
+		}
+		if (event.key !== 'Enter' || activeResultID !== result.id) return;
+		const [firstDefinition] = filteredDefinitions(result);
+		if (firstDefinition === undefined) return;
+		event.preventDefault();
+		selectDefinition(result, firstDefinition);
+	}
+
+	function openDefinitionMenu(result: ResultDraft) {
+		activeResultID = result.id;
 	}
 
 	function parseOptionalNumber(raw: string): number | null {
@@ -372,25 +426,54 @@
 				</button>
 			</div>
 			{#if resultDrafts.length > 0}
-				<datalist id="result-definition-list">
-					{#each definitionOptions() as definition}
-						<option value={definition.name} label={definitionLabel(definition)}></option>
-					{/each}
-				</datalist>
 				<div class="space-y-3">
 					{#each resultDrafts as result}
 						<div class="grid gap-3 border-t border-surface-200 pt-3 md:grid-cols-12">
-							<label class="label md:col-span-4">
+							<div class="label md:col-span-4">
 								<span class="text-sm font-semibold">Result</span>
-								<input
-									value={result.name}
-									class="input"
-									list="result-definition-list"
-									maxlength="200"
-									placeholder="Start typing"
-									oninput={(event) => syncDefinitionInput(result, event)}
-								/>
-							</label>
+								<div class="autocomplete-field">
+									<input
+										value={result.name}
+										class="input"
+										maxlength="200"
+										placeholder="Start typing"
+										autocomplete="off"
+										role="combobox"
+										aria-autocomplete="list"
+										aria-expanded={activeResultID === result.id}
+										aria-controls={`result-definition-menu-${result.id}`}
+										onfocus={() => openDefinitionMenu(result)}
+										onblur={closeDefinitionMenu}
+										onkeydown={(event) => handleDefinitionKeydown(result, event)}
+										oninput={(event) => syncDefinitionInput(result, event)}
+									/>
+									{#if activeResultID === result.id && filteredDefinitions(result).length > 0}
+										<div
+											id={`result-definition-menu-${result.id}`}
+											class="autocomplete-menu"
+											role="listbox"
+										>
+											{#each filteredDefinitions(result) as definition}
+												<button
+													type="button"
+													class="autocomplete-option"
+													role="option"
+													aria-selected={definition.id === result.definitionID}
+													onmousedown={(event) => selectDefinition(result, definition, event)}
+												>
+													<span class="autocomplete-option-title">{definition.name}</span>
+													<span class="autocomplete-option-meta">
+														<span>{definitionLabel(definition)}</span>
+														{#if definition.reference_min !== null || definition.reference_max !== null}
+															<span>{definitionRange(definition)}</span>
+														{/if}
+													</span>
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							</div>
 							<label class="label md:col-span-2">
 								<span class="text-sm font-semibold">Value</span>
 								<input bind:value={result.value} class="input" maxlength="120" placeholder="44" />
