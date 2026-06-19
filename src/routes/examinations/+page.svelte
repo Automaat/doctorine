@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { formatDate } from '$lib/format';
+	import type { ExaminationResult } from '$lib/types';
 	import { Plus } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let error = $state('');
 	let saving = $state(false);
+	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
 
 	function value(form: FormData, key: string): string | null {
 		const raw = String(form.get(key) ?? '').trim();
@@ -41,6 +43,20 @@
 		}
 		formEl.reset();
 		await invalidateAll();
+	}
+
+	function resultValue(result: ExaminationResult): string {
+		if (result.value_text) return result.value_text;
+		if (result.value_numeric === null) return '-';
+		return `${result.value_prefix ?? ''}${numberFormat.format(result.value_numeric)}`;
+	}
+
+	function resultRange(result: ExaminationResult): string {
+		if (result.reference_min === null && result.reference_max === null) return '-';
+		if (result.reference_min === null)
+			return `<= ${numberFormat.format(result.reference_max ?? 0)}`;
+		if (result.reference_max === null) return `>= ${numberFormat.format(result.reference_min)}`;
+		return `${numberFormat.format(result.reference_min)}-${numberFormat.format(result.reference_max)}`;
 	}
 </script>
 
@@ -120,6 +136,36 @@
 								<div class="font-semibold">{examination.title}</div>
 								{#if examination.summary}
 									<div class="text-sm text-surface-700">{examination.summary}</div>
+								{/if}
+								{#if examination.results.length > 0}
+									<div class="mt-3 overflow-x-auto rounded-md border border-surface-200">
+										<div
+											class="grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] bg-surface-50 text-sm font-semibold"
+										>
+											<div class="px-3 py-2">Result</div>
+											<div class="px-3 py-2">Value</div>
+											<div class="px-3 py-2">Unit</div>
+											<div class="px-3 py-2">Range</div>
+											<div class="px-3 py-2">Flag</div>
+										</div>
+										{#each examination.results as result}
+											<div
+												class="grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] border-t border-surface-200 text-sm"
+											>
+												<div class="px-3 py-2">{result.name}</div>
+												<div class="px-3 py-2 font-semibold">{resultValue(result)}</div>
+												<div class="px-3 py-2">{result.unit ?? '-'}</div>
+												<div class="px-3 py-2">{resultRange(result)}</div>
+												<div class="px-3 py-2">
+													{#if result.flag}
+														<span class="font-semibold text-warning-700">{result.flag}</span>
+													{:else}
+														-
+													{/if}
+												</div>
+											</div>
+										{/each}
+									</div>
 								{/if}
 							</td>
 							<td data-label="Date">{formatDate(examination.exam_date)}</td>

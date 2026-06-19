@@ -3,10 +3,13 @@ package examinations
 import (
 	"log/slog"
 	"net/http"
+	"regexp"
 
 	"github.com/Automaat/doctorine/backend-go/internal/healthstatus"
 	"github.com/Automaat/doctorine/backend-go/internal/httputil"
 )
+
+var resultKeyPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 type Handler struct {
 	store  *Store
@@ -21,13 +24,27 @@ func NewHandler(store *Store, logger *slog.Logger) *Handler {
 }
 
 type createRequest struct {
-	Title        string  `json:"title"`
-	ExamDate     string  `json:"exam_date"`
-	Category     string  `json:"category"`
-	Facility     *string `json:"facility"`
-	ResultStatus string  `json:"result_status"`
-	Summary      *string `json:"summary"`
-	Notes        *string `json:"notes"`
+	Title        string          `json:"title"`
+	ExamDate     string          `json:"exam_date"`
+	Category     string          `json:"category"`
+	Facility     *string         `json:"facility"`
+	ResultStatus string          `json:"result_status"`
+	Summary      *string         `json:"summary"`
+	Notes        *string         `json:"notes"`
+	Results      []resultRequest `json:"results"`
+}
+
+type resultRequest struct {
+	TestKey      string   `json:"test_key"`
+	Name         string   `json:"name"`
+	ValueText    *string  `json:"value_text"`
+	ValueNumeric *float64 `json:"value_numeric"`
+	ValuePrefix  *string  `json:"value_prefix"`
+	Unit         *string  `json:"unit"`
+	ReferenceMin *float64 `json:"reference_min"`
+	ReferenceMax *float64 `json:"reference_max"`
+	Flag         *string  `json:"flag"`
+	DisplayOrder int      `json:"display_order"`
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +97,10 @@ func validateCreate(req createRequest) (CreateParams, string) {
 	if status != "unknown" && status != "normal" && status != "attention" && status != "urgent" {
 		return CreateParams{}, "Result status must be unknown, normal, attention, or urgent"
 	}
+	results, detail := validateResults(req.Results)
+	if detail != "" {
+		return CreateParams{}, detail
+	}
 	return CreateParams{
 		Title:        title,
 		ExamDate:     examDate,
@@ -88,7 +109,60 @@ func validateCreate(req createRequest) (CreateParams, string) {
 		ResultStatus: status,
 		Summary:      cleanOptional(req.Summary),
 		Notes:        cleanOptional(req.Notes),
+		Results:      results,
 	}, ""
+}
+
+func validateResults(req []resultRequest) ([]ResultParams, string) {
+	if len(req) > 300 {
+		return nil, "Results cannot exceed 300 rows"
+	}
+	results := make([]ResultParams, 0, len(req))
+	seen := map[string]bool{}
+	for i, item := range req {
+		key := healthstatus.CleanString(item.TestKey)
+		if key == "" {
+			return nil, "Result test_key is required"
+		}
+		if len(key) > 120 || !resultKeyPattern.MatchString(key) {
+			return nil, "Result test_key must use lowercase letters, numbers, and underscores"
+		}
+		if seen[key] {
+			return nil, "Result test_key must be unique per examination"
+		}
+		seen[key] = true
+
+		name := healthstatus.CleanString(item.Name)
+		if name == "" {
+			return nil, "Result name is required"
+		}
+		valueText := cleanOptional(item.ValueText)
+		if valueText == nil && item.ValueNumeric == nil {
+			return nil, "Result value_text or value_numeric is required"
+		}
+		valuePrefix := cleanOptional(item.ValuePrefix)
+		if valuePrefix != nil && *valuePrefix != "<" && *valuePrefix != ">" &&
+			*valuePrefix != "<=" && *valuePrefix != ">=" {
+			return nil, "Result value_prefix must be <, >, <=, or >="
+		}
+		order := item.DisplayOrder
+		if order == 0 {
+			order = i + 1
+		}
+		results = append(results, ResultParams{
+			TestKey:      key,
+			Name:         name,
+			ValueText:    valueText,
+			ValueNumeric: item.ValueNumeric,
+			ValuePrefix:  valuePrefix,
+			Unit:         cleanOptional(item.Unit),
+			ReferenceMin: item.ReferenceMin,
+			ReferenceMax: item.ReferenceMax,
+			Flag:         cleanOptional(item.Flag),
+			DisplayOrder: order,
+		})
+	}
+	return results, ""
 }
 
 func cleanOptional(value *string) *string {

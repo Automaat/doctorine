@@ -42,6 +42,31 @@ CREATE TABLE IF NOT EXISTS examinations (
 CREATE INDEX IF NOT EXISTS ix_examinations_exam_date ON examinations (exam_date DESC);
 CREATE INDEX IF NOT EXISTS ix_examinations_result_status ON examinations (result_status);
 
+CREATE TABLE IF NOT EXISTS examination_results (
+	id serial PRIMARY KEY,
+	examination_id integer NOT NULL REFERENCES examinations(id) ON DELETE CASCADE,
+	test_key varchar(120) NOT NULL,
+	name varchar(200) NOT NULL,
+	value_text varchar(120),
+	value_numeric double precision,
+	value_prefix varchar(2),
+	unit varchar(80),
+	reference_min double precision,
+	reference_max double precision,
+	flag varchar(20),
+	display_order integer NOT NULL DEFAULT 0,
+	created_at timestamp without time zone NOT NULL DEFAULT (now() at time zone 'utc'),
+	updated_at timestamp without time zone NOT NULL DEFAULT (now() at time zone 'utc'),
+	CONSTRAINT examination_results_test_key_check CHECK (test_key ~ '^[a-z0-9_]+$'),
+	CONSTRAINT examination_results_value_prefix_check CHECK (
+		value_prefix IS NULL OR value_prefix IN ('<', '>', '<=', '>=')
+	),
+	CONSTRAINT examination_results_unique_key UNIQUE (examination_id, test_key)
+);
+
+CREATE INDEX IF NOT EXISTS ix_examination_results_test_key ON examination_results (test_key, examination_id);
+CREATE INDEX IF NOT EXISTS ix_examination_results_examination_id ON examination_results (examination_id);
+
 CREATE TABLE IF NOT EXISTS documents (
 	id serial PRIMARY KEY,
 	title varchar(240) NOT NULL,
