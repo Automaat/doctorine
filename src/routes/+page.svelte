@@ -106,7 +106,9 @@
 	let { data }: { data: PageData } = $props();
 
 	const examinations = $derived(
-		[...data.examinations].sort((left, right) => right.exam_date.localeCompare(left.exam_date))
+		[...(data.examinations ?? [])].sort((left, right) =>
+			right.exam_date.localeCompare(left.exam_date)
+		)
 	);
 	const rows = $derived.by<ResultRow[]>(() =>
 		examinations.flatMap((examination) =>
