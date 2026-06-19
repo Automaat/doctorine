@@ -405,7 +405,7 @@
 											<div
 												class={[
 													'grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] border-t border-surface-200 text-sm',
-													isBeyondNorm(result) ? 'bg-error-50 text-error-900' : ''
+													isBeyondNorm(result) ? 'result-row-abnormal' : ''
 												]}
 											>
 												<div class="px-3 py-2">{result.name}</div>
@@ -414,7 +414,7 @@
 												<div class="px-3 py-2">{resultRange(result)}</div>
 												<div class="px-3 py-2">
 													{#if resultFlag(result)}
-														<span class="font-semibold text-error-700">{resultFlag(result)}</span>
+														<span class="result-flag-abnormal">{resultFlag(result)}</span>
 													{:else}
 														-
 													{/if}

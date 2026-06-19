@@ -59,6 +59,24 @@ body {
 	text-transform: uppercase;
 }
 
+.result-row-abnormal {
+	background: #fee2e2;
+	box-shadow: inset 4px 0 0 #dc2626;
+	color: #7f1d1d;
+}
+
+.result-flag-abnormal {
+	border-radius: var(--radius-1);
+	background: #dc2626;
+	color: white;
+	display: inline-flex;
+	font-weight: 700;
+	line-height: 1;
+	min-width: 1.5rem;
+	padding: 0.25rem 0.4rem;
+	justify-content: center;
+}
+
 @media (max-width: 767px) {
 	.table-cards :is(table, tbody, tr, td) {
 		display: block;
