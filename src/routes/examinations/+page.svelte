@@ -11,10 +11,7 @@
 		testKey: string;
 		name: string;
 		value: string;
-		valuePrefix: string;
 		unit: string;
-		referenceMin: string;
-		referenceMax: string;
 	};
 
 	type ResultPayload = {
@@ -70,10 +67,7 @@
 			testKey: '',
 			name: '',
 			value: '',
-			valuePrefix: '',
-			unit: '',
-			referenceMin: '',
-			referenceMax: ''
+			unit: ''
 		};
 	}
 
@@ -169,8 +163,6 @@
 		result.testKey = definition.test_key;
 		result.name = definition.name;
 		result.unit = definition.unit ?? '';
-		result.referenceMin = draftNumber(definition.reference_min);
-		result.referenceMax = draftNumber(definition.reference_max);
 	}
 
 	function selectDefinition(result: ResultDraft, definition: ResultDefinition, event?: Event) {
@@ -217,13 +209,6 @@
 		activeResultID = result.id;
 	}
 
-	function parseOptionalNumber(raw: string): number | null {
-		const cleaned = raw.trim().replace(',', '.');
-		if (cleaned === '') return null;
-		const parsed = Number(cleaned);
-		return Number.isFinite(parsed) ? parsed : null;
-	}
-
 	function parseNumericValue(raw: string): number | null {
 		const cleaned = raw
 			.trim()
@@ -234,8 +219,7 @@
 		return Number.isFinite(parsed) ? parsed : null;
 	}
 
-	function inferredPrefix(raw: string, selected: string): string | null {
-		if (selected !== '') return selected;
+	function inferredPrefix(raw: string): string | null {
 		const match = raw.trim().match(/^(<=|>=|<|>)/);
 		return match?.[1] ?? null;
 	}
@@ -255,15 +239,9 @@
 		for (const [index, draft] of resultDrafts.entries()) {
 			const name = draft.name.trim();
 			const rawValue = draft.value.trim();
-			const hasAnyValue = [
-				draft.testKey,
-				draft.name,
-				draft.value,
-				draft.valuePrefix,
-				draft.unit,
-				draft.referenceMin,
-				draft.referenceMax
-			].some((field) => field.trim() !== '');
+			const hasAnyValue = [draft.testKey, draft.name, draft.value, draft.unit].some(
+				(field) => field.trim() !== ''
+			);
 			if (!hasAnyValue) continue;
 			if (name === '' || rawValue === '') {
 				return { results: [], detail: 'Each result needs name and value' };
@@ -272,24 +250,16 @@
 			if (testKey === '') return { results: [], detail: 'Each result needs a valid key' };
 			if (keys.has(testKey)) return { results: [], detail: 'Result keys must be unique' };
 			keys.add(testKey);
-			const referenceMin = parseOptionalNumber(draft.referenceMin);
-			const referenceMax = parseOptionalNumber(draft.referenceMax);
-			if (draft.referenceMin.trim() !== '' && referenceMin === null) {
-				return { results: [], detail: 'Result minimum must be numeric' };
-			}
-			if (draft.referenceMax.trim() !== '' && referenceMax === null) {
-				return { results: [], detail: 'Result maximum must be numeric' };
-			}
 			results.push({
 				definition_id: draft.definitionID,
 				test_key: testKey,
 				name,
 				value_text: rawValue,
 				value_numeric: parseNumericValue(rawValue),
-				value_prefix: inferredPrefix(rawValue, draft.valuePrefix),
+				value_prefix: inferredPrefix(rawValue),
 				unit: draft.unit.trim() || null,
-				reference_min: referenceMin,
-				reference_max: referenceMax,
+				reference_min: null,
+				reference_max: null,
 				display_order: index + 1
 			});
 		}
@@ -429,7 +399,7 @@
 				<div class="space-y-3">
 					{#each resultDrafts as result}
 						<div class="grid gap-3 border-t border-surface-200 pt-3 md:grid-cols-12">
-							<div class="label md:col-span-4">
+							<div class="label md:col-span-5">
 								<span class="text-sm font-semibold">Result</span>
 								<div class="autocomplete-field">
 									<input
@@ -474,21 +444,16 @@
 									{/if}
 								</div>
 							</div>
-							<label class="label md:col-span-2">
+							<label class="label md:col-span-3">
 								<span class="text-sm font-semibold">Value</span>
-								<input bind:value={result.value} class="input" maxlength="120" placeholder="44" />
+								<input
+									bind:value={result.value}
+									class="input"
+									maxlength="120"
+									placeholder="44 or <5"
+								/>
 							</label>
-							<label class="label md:col-span-1">
-								<span class="text-sm font-semibold">Prefix</span>
-								<select bind:value={result.valuePrefix} class="select">
-									<option value="">=</option>
-									<option value="<">&lt;</option>
-									<option value=">">&gt;</option>
-									<option value="<=">&lt;=</option>
-									<option value=">=">&gt;=</option>
-								</select>
-							</label>
-							<label class="label md:col-span-2">
+							<label class="label md:col-span-3">
 								<span class="text-sm font-semibold">Unit</span>
 								<select bind:value={result.unit} class="select">
 									<option value="">None</option>
@@ -497,15 +462,7 @@
 									{/each}
 								</select>
 							</label>
-							<label class="label md:col-span-1">
-								<span class="text-sm font-semibold">Min</span>
-								<input bind:value={result.referenceMin} class="input" inputmode="decimal" />
-							</label>
-							<label class="label md:col-span-1">
-								<span class="text-sm font-semibold">Max</span>
-								<input bind:value={result.referenceMax} class="input" inputmode="decimal" />
-							</label>
-							<div class="flex items-end md:col-span-12">
+							<div class="flex items-end md:col-span-1">
 								<button
 									type="button"
 									class="btn preset-tonal-error-500"
