@@ -374,7 +374,8 @@
 			</div>
 			{#if resultDrafts.length > 0}
 				<div class="space-y-3">
-					{#each resultDrafts as result}
+					{#each resultDrafts as result (result.id)}
+						{@const matchingDefinitions = filteredDefinitions(result)}
 						<div class="grid gap-3 border-t border-surface-200 pt-3 md:grid-cols-12">
 							<div class="label md:col-span-5">
 								<span class="text-sm font-semibold">Result</span>
@@ -394,13 +395,13 @@
 										onkeydown={(event) => handleDefinitionKeydown(result, event)}
 										oninput={(event) => syncDefinitionInput(result, event)}
 									/>
-									{#if activeResultID === result.id && filteredDefinitions(result).length > 0}
+									{#if activeResultID === result.id && matchingDefinitions.length > 0}
 										<div
 											id={`result-definition-menu-${result.id}`}
 											class="autocomplete-menu"
 											role="listbox"
 										>
-											{#each filteredDefinitions(result) as definition}
+											{#each matchingDefinitions as definition (definition.id)}
 												<button
 													type="button"
 													class="autocomplete-option"
