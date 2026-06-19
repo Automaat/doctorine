@@ -43,8 +43,9 @@ type resultRequest struct {
 	Unit         *string  `json:"unit"`
 	ReferenceMin *float64 `json:"reference_min"`
 	ReferenceMax *float64 `json:"reference_max"`
-	Flag         *string  `json:"flag"`
-	DisplayOrder int      `json:"display_order"`
+	// Accepted for old clients, recalculated server-side.
+	Flag         *string `json:"flag"`
+	DisplayOrder int     `json:"display_order"`
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +146,7 @@ func validateResults(req []resultRequest) ([]ResultParams, string) {
 			*valuePrefix != "<=" && *valuePrefix != ">=" {
 			return nil, "Result value_prefix must be <, >, <=, or >="
 		}
+		flag := computeFlag(item.ValueNumeric, valuePrefix, item.ReferenceMin, item.ReferenceMax)
 		order := item.DisplayOrder
 		if order == 0 {
 			order = i + 1
@@ -158,11 +160,32 @@ func validateResults(req []resultRequest) ([]ResultParams, string) {
 			Unit:         cleanOptional(item.Unit),
 			ReferenceMin: item.ReferenceMin,
 			ReferenceMax: item.ReferenceMax,
-			Flag:         cleanOptional(item.Flag),
+			Flag:         flag,
 			DisplayOrder: order,
 		})
 	}
 	return results, ""
+}
+
+func computeFlag(value *float64, prefix *string, referenceMin *float64, referenceMax *float64) *string {
+	if value == nil {
+		return nil
+	}
+	if referenceMin != nil && *value < *referenceMin {
+		return computedFlag("L")
+	}
+	if referenceMax != nil && *value > *referenceMax {
+		return computedFlag("H")
+	}
+	if prefix != nil && (*prefix == "<" || *prefix == "<=") &&
+		referenceMin != nil && *value <= *referenceMin {
+		return computedFlag("L")
+	}
+	if prefix != nil && (*prefix == ">" || *prefix == ">=") &&
+		referenceMax != nil && *value >= *referenceMax {
+		return computedFlag("H")
+	}
+	return nil
 }
 
 func cleanOptional(value *string) *string {
@@ -170,4 +193,8 @@ func cleanOptional(value *string) *string {
 		return nil
 	}
 	return healthstatus.NilIfEmpty(*value)
+}
+
+func computedFlag(value string) *string {
+	return &value
 }

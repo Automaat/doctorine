@@ -14,7 +14,6 @@
 		unit: string;
 		referenceMin: string;
 		referenceMax: string;
-		flag: string;
 	};
 
 	type ResultPayload = {
@@ -26,7 +25,6 @@
 		unit: string | null;
 		reference_min: number | null;
 		reference_max: number | null;
-		flag: string | null;
 		display_order: number;
 	};
 
@@ -36,6 +34,24 @@
 	let resultDrafts = $state<ResultDraft[]>([]);
 	let nextResultID = 1;
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
+	const unitOptions = [
+		'%',
+		'g/dl',
+		'fl',
+		'pg',
+		'tys/ul',
+		'mln/ul',
+		'mg/dl',
+		'g/ml',
+		'mmol/l',
+		'pg/ml',
+		'ng/ml',
+		'U/l',
+		'umol/l',
+		'ml/min/1.73m2',
+		'uIU/ml',
+		'mg/l'
+	];
 
 	function formValue(form: FormData, key: string): string | null {
 		const raw = String(form.get(key) ?? '').trim();
@@ -53,8 +69,7 @@
 			valuePrefix: '',
 			unit: '',
 			referenceMin: '',
-			referenceMax: '',
-			flag: ''
+			referenceMax: ''
 		};
 	}
 
@@ -116,8 +131,7 @@
 				draft.valuePrefix,
 				draft.unit,
 				draft.referenceMin,
-				draft.referenceMax,
-				draft.flag
+				draft.referenceMax
 			].some((field) => field.trim() !== '');
 			if (!hasAnyValue) continue;
 			if (name === '' || rawValue === '') {
@@ -144,7 +158,6 @@
 				unit: draft.unit.trim() || null,
 				reference_min: referenceMin,
 				reference_max: referenceMax,
-				flag: draft.flag.trim() || null,
 				display_order: index + 1
 			});
 		}
@@ -194,6 +207,28 @@
 		return `${result.value_prefix ?? ''}${numberFormat.format(result.value_numeric)}`;
 	}
 
+	function resultFlag(result: ExaminationResult): string | null {
+		if (result.flag) return result.flag;
+		if (result.value_numeric === null) return null;
+		if (result.reference_min !== null && result.value_numeric < result.reference_min) return 'L';
+		if (result.reference_max !== null && result.value_numeric > result.reference_max) return 'H';
+		if (
+			(result.value_prefix === '<' || result.value_prefix === '<=') &&
+			result.reference_min !== null &&
+			result.value_numeric <= result.reference_min
+		) {
+			return 'L';
+		}
+		if (
+			(result.value_prefix === '>' || result.value_prefix === '>=') &&
+			result.reference_max !== null &&
+			result.value_numeric >= result.reference_max
+		) {
+			return 'H';
+		}
+		return null;
+	}
+
 	function resultRange(result: ExaminationResult): string {
 		if (result.reference_min === null && result.reference_max === null) return '-';
 		if (result.reference_min === null)
@@ -203,17 +238,7 @@
 	}
 
 	function isBeyondNorm(result: ExaminationResult): boolean {
-		if (result.flag) return true;
-		if (result.value_numeric === null) return false;
-		if (result.reference_min !== null && result.value_numeric < result.reference_min) return true;
-		if (result.reference_max !== null && result.value_numeric > result.reference_max) return true;
-		if (result.value_prefix === '<' || result.value_prefix === '<=') {
-			return result.reference_min !== null && result.value_numeric <= result.reference_min;
-		}
-		if (result.value_prefix === '>' || result.value_prefix === '>=') {
-			return result.reference_max !== null && result.value_numeric >= result.reference_max;
-		}
-		return false;
+		return resultFlag(result) !== null;
 	}
 </script>
 
@@ -301,7 +326,12 @@
 							</label>
 							<label class="label md:col-span-2">
 								<span class="text-sm font-semibold">Unit</span>
-								<input bind:value={result.unit} class="input" maxlength="80" placeholder="U/l" />
+								<select bind:value={result.unit} class="select">
+									<option value="">None</option>
+									{#each unitOptions as unit}
+										<option value={unit}>{unit}</option>
+									{/each}
+								</select>
 							</label>
 							<label class="label md:col-span-1">
 								<span class="text-sm font-semibold">Min</span>
@@ -311,11 +341,7 @@
 								<span class="text-sm font-semibold">Max</span>
 								<input bind:value={result.referenceMax} class="input" inputmode="decimal" />
 							</label>
-							<label class="label md:col-span-2">
-								<span class="text-sm font-semibold">Flag</span>
-								<input bind:value={result.flag} class="input" maxlength="20" placeholder="H" />
-							</label>
-							<div class="flex items-end md:col-span-2">
+							<div class="flex items-end md:col-span-12">
 								<button
 									type="button"
 									class="btn preset-tonal-error-500"
@@ -387,8 +413,8 @@
 												<div class="px-3 py-2">{result.unit ?? '-'}</div>
 												<div class="px-3 py-2">{resultRange(result)}</div>
 												<div class="px-3 py-2">
-													{#if result.flag}
-														<span class="font-semibold text-error-700">{result.flag}</span>
+													{#if resultFlag(result)}
+														<span class="font-semibold text-error-700">{resultFlag(result)}</span>
 													{:else}
 														-
 													{/if}

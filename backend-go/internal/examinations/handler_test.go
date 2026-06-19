@@ -6,7 +6,6 @@ func TestValidateCreateWithResults(t *testing.T) {
 	value := 44.0
 	minimum := 11.0
 	maximum := 34.0
-	flag := "H"
 	params, detail := validateCreate(createRequest{
 		Title:        "Lab report",
 		ExamDate:     "2025-10-31",
@@ -20,7 +19,6 @@ func TestValidateCreateWithResults(t *testing.T) {
 			Unit:         stringPtr("U/l"),
 			ReferenceMin: &minimum,
 			ReferenceMax: &maximum,
-			Flag:         &flag,
 		}},
 	})
 
@@ -36,6 +34,48 @@ func TestValidateCreateWithResults(t *testing.T) {
 	}
 	if result.Flag == nil || *result.Flag != "H" {
 		t.Fatalf("flag = %v, want H", result.Flag)
+	}
+}
+
+func TestValidateResultsComputesLowFlag(t *testing.T) {
+	value := 3.0
+	minimum := 4.0
+	params, detail := validateResults([]resultRequest{{
+		TestKey:      "leukocyty",
+		Name:         "Leukocyty",
+		ValueText:    stringPtr("3,0"),
+		ValueNumeric: &value,
+		ReferenceMin: &minimum,
+	}})
+
+	if detail != "" {
+		t.Fatal(detail)
+	}
+	if params[0].Flag == nil || *params[0].Flag != "L" {
+		t.Fatalf("flag = %v, want L", params[0].Flag)
+	}
+}
+
+func TestValidateResultsIgnoresClientFlag(t *testing.T) {
+	value := 5.0
+	minimum := 4.0
+	maximum := 10.0
+	clientFlag := "H"
+	params, detail := validateResults([]resultRequest{{
+		TestKey:      "glukoza",
+		Name:         "Glukoza",
+		ValueText:    stringPtr("5,0"),
+		ValueNumeric: &value,
+		ReferenceMin: &minimum,
+		ReferenceMax: &maximum,
+		Flag:         &clientFlag,
+	}})
+
+	if detail != "" {
+		t.Fatal(detail)
+	}
+	if params[0].Flag != nil {
+		t.Fatalf("flag = %v, want nil", params[0].Flag)
 	}
 }
 
