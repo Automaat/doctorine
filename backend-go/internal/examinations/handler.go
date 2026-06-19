@@ -1,12 +1,19 @@
 package examinations
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/Automaat/doctorine/backend-go/internal/healthstatus"
 	"github.com/Automaat/doctorine/backend-go/internal/httputil"
 )
+
+var resultKeyPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 type Handler struct {
 	store  *Store
@@ -21,13 +28,29 @@ func NewHandler(store *Store, logger *slog.Logger) *Handler {
 }
 
 type createRequest struct {
-	Title        string  `json:"title"`
-	ExamDate     string  `json:"exam_date"`
-	Category     string  `json:"category"`
-	Facility     *string `json:"facility"`
-	ResultStatus string  `json:"result_status"`
-	Summary      *string `json:"summary"`
-	Notes        *string `json:"notes"`
+	Title        string          `json:"title"`
+	ExamDate     string          `json:"exam_date"`
+	Category     string          `json:"category"`
+	Facility     *string         `json:"facility"`
+	ResultStatus string          `json:"result_status"`
+	Summary      *string         `json:"summary"`
+	Notes        *string         `json:"notes"`
+	Results      []resultRequest `json:"results"`
+}
+
+type resultRequest struct {
+	DefinitionID *int     `json:"definition_id"`
+	TestKey      string   `json:"test_key"`
+	Name         string   `json:"name"`
+	ValueText    *string  `json:"value_text"`
+	ValueNumeric *float64 `json:"value_numeric"`
+	ValuePrefix  *string  `json:"value_prefix"`
+	Unit         *string  `json:"unit"`
+	ReferenceMin *float64 `json:"reference_min"`
+	ReferenceMax *float64 `json:"reference_max"`
+	// Accepted for old clients, recalculated server-side.
+	Flag         *string `json:"flag"`
+	DisplayOrder int     `json:"display_order"`
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -38,6 +61,24 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	item, err := h.store.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrExaminationNotFound) {
+			httputil.WriteDetailError(w, http.StatusNotFound, "Examination not found")
+			return
+		}
+		h.logger.Error("get examination", "err", err)
+		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, item)
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +94,32 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.store.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, ErrResultDefinitionNotFound) {
+			httputil.WriteDetailError(w, http.StatusUnprocessableEntity, "Result definition not found")
+			return
+		}
 		h.logger.Error("create examination", "err", err)
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 	httputil.WriteJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	if err := h.store.Delete(r.Context(), id); err != nil {
+		if errors.Is(err, ErrExaminationNotFound) {
+			httputil.WriteDetailError(w, http.StatusNotFound, "Examination not found")
+			return
+		}
+		h.logger.Error("delete examination", "err", err)
+		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func validateCreate(req createRequest) (CreateParams, string) {
@@ -80,6 +142,10 @@ func validateCreate(req createRequest) (CreateParams, string) {
 	if status != "unknown" && status != "normal" && status != "attention" && status != "urgent" {
 		return CreateParams{}, "Result status must be unknown, normal, attention, or urgent"
 	}
+	results, detail := validateResults(req.Results)
+	if detail != "" {
+		return CreateParams{}, detail
+	}
 	return CreateParams{
 		Title:        title,
 		ExamDate:     examDate,
@@ -88,7 +154,90 @@ func validateCreate(req createRequest) (CreateParams, string) {
 		ResultStatus: status,
 		Summary:      cleanOptional(req.Summary),
 		Notes:        cleanOptional(req.Notes),
+		Results:      results,
 	}, ""
+}
+
+func validateResults(req []resultRequest) ([]ResultParams, string) {
+	if len(req) > 300 {
+		return nil, "Results cannot exceed 300 rows"
+	}
+	results := make([]ResultParams, 0, len(req))
+	seen := map[string]bool{}
+	for i, item := range req {
+		if item.DefinitionID != nil && *item.DefinitionID <= 0 {
+			return nil, "Result definition_id must be positive"
+		}
+		key := healthstatus.CleanString(item.TestKey)
+		if key == "" {
+			return nil, "Result test_key is required"
+		}
+		if len(key) > 120 || !resultKeyPattern.MatchString(key) {
+			return nil, "Result test_key must use lowercase letters, numbers, and underscores"
+		}
+		if seen[key] {
+			return nil, "Result test_key must be unique per examination"
+		}
+		seen[key] = true
+
+		name := healthstatus.CleanString(item.Name)
+		if name == "" {
+			return nil, "Result name is required"
+		}
+		valueText := cleanOptional(item.ValueText)
+		if valueText == nil && item.ValueNumeric == nil {
+			return nil, "Result value_text or value_numeric is required"
+		}
+		valuePrefix := cleanOptional(item.ValuePrefix)
+		if valuePrefix != nil && *valuePrefix != "<" && *valuePrefix != ">" &&
+			*valuePrefix != "<=" && *valuePrefix != ">=" {
+			return nil, "Result value_prefix must be <, >, <=, or >="
+		}
+		flag := computeFlag(item.ValueNumeric, valuePrefix, item.ReferenceMin, item.ReferenceMax)
+		order := item.DisplayOrder
+		if order == 0 {
+			order = i + 1
+		}
+		results = append(results, ResultParams{
+			DefinitionID: item.DefinitionID,
+			TestKey:      key,
+			Name:         name,
+			ValueText:    valueText,
+			ValueNumeric: item.ValueNumeric,
+			ValuePrefix:  valuePrefix,
+			Unit:         cleanOptional(item.Unit),
+			ReferenceMin: item.ReferenceMin,
+			ReferenceMax: item.ReferenceMax,
+			Flag:         flag,
+			DisplayOrder: order,
+		})
+	}
+	return results, ""
+}
+
+func computeFlag(value *float64, prefix *string, referenceMin *float64, referenceMax *float64) *string {
+	if value == nil {
+		return nil
+	}
+	if referenceMin != nil && *value < *referenceMin {
+		flag := "L"
+		return &flag
+	}
+	if referenceMax != nil && *value > *referenceMax {
+		flag := "H"
+		return &flag
+	}
+	if prefix != nil && (*prefix == "<" || *prefix == "<=") &&
+		referenceMin != nil && *value <= *referenceMin {
+		flag := "L"
+		return &flag
+	}
+	if prefix != nil && (*prefix == ">" || *prefix == ">=") &&
+		referenceMax != nil && *value >= *referenceMax {
+		flag := "H"
+		return &flag
+	}
+	return nil
 }
 
 func cleanOptional(value *string) *string {
@@ -96,4 +245,13 @@ func cleanOptional(value *string) *string {
 		return nil
 	}
 	return healthstatus.NilIfEmpty(*value)
+}
+
+func parseID(w http.ResponseWriter, raw string) (int, bool) {
+	id, err := strconv.Atoi(raw)
+	if err != nil || id <= 0 {
+		httputil.WriteDetailError(w, http.StatusBadRequest, "Invalid id")
+		return 0, false
+	}
+	return id, true
 }

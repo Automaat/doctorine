@@ -8,9 +8,9 @@ import (
 	"io"
 	"log/slog"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -20,7 +20,18 @@ import (
 	"github.com/Automaat/doctorine/backend-go/internal/httputil"
 )
 
-const maxUploadBytes = 50 << 20
+const (
+	maxUploadBytes    = 50 << 20
+	maxFormFieldBytes = 1 << 20
+)
+
+type uploadedFile struct {
+	originalFilename string
+	storageName      string
+	contentType      string
+	sizeBytes        int64
+	sha256Hex        string
+}
 
 type Handler struct {
 	store     *Store
@@ -47,46 +58,33 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
-		httputil.WriteDetailError(w, http.StatusBadRequest, "Upload must be multipart and under 50 MB")
-		return
-	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		httputil.WriteDetailError(w, http.StatusUnprocessableEntity, "File is required")
-		return
-	}
-	defer file.Close()
-
-	params, detail := h.paramsFromForm(r, header.Filename)
+	fields, upload, status, detail, err := h.readMultipartUpload(r)
 	if detail != "" {
+		if upload.storageName != "" {
+			_ = removeUpload(h.uploadDir, upload.storageName)
+		}
+		if err != nil && status >= http.StatusInternalServerError {
+			h.logger.Error("read upload", "err", err)
+		}
+		httputil.WriteDetailError(w, status, detail)
+		return
+	}
+
+	params, detail := h.paramsFromValues(fields, upload.originalFilename)
+	if detail != "" {
+		_ = removeUpload(h.uploadDir, upload.storageName)
 		httputil.WriteDetailError(w, http.StatusUnprocessableEntity, detail)
 		return
 	}
-	params.OriginalFilename = safeFilename(header.Filename)
-	params.StorageName, err = newStorageName(header.Filename)
-	if err != nil {
-		h.logger.Error("new storage name", "err", err)
-		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
-	params.ContentType = header.Header.Get("content-type")
-
-	path := filepath.Join(h.uploadDir, params.StorageName)
-	written, shaHex, detectedType, err := writeUpload(path, file, params.ContentType)
-	if err != nil {
-		_ = os.Remove(path)
-		h.logger.Error("write upload", "err", err)
-		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
-	params.SizeBytes = written
-	params.SHA256Hex = shaHex
-	params.ContentType = detectedType
+	params.OriginalFilename = safeFilename(upload.originalFilename)
+	params.StorageName = upload.storageName
+	params.ContentType = upload.contentType
+	params.SizeBytes = upload.sizeBytes
+	params.SHA256Hex = upload.sha256Hex
 
 	item, err := h.store.Create(r.Context(), params)
 	if err != nil {
-		_ = os.Remove(path)
+		_ = removeUpload(h.uploadDir, params.StorageName)
 		h.logger.Error("create document", "err", err)
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
@@ -109,8 +107,7 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
-	path := filepath.Join(h.uploadDir, item.StorageName)
-	file, err := os.Open(path)
+	file, err := openUpload(h.uploadDir, item.StorageName)
 	if err != nil {
 		h.logger.Error("open document file", "err", err, "document_id", id)
 		httputil.WriteDetailError(w, http.StatusNotFound, "Document file not found")
@@ -140,33 +137,151 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
-	if err := os.Remove(filepath.Join(h.uploadDir, item.StorageName)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeUpload(h.uploadDir, item.StorageName); err != nil && !errors.Is(err, os.ErrNotExist) {
 		h.logger.Warn("remove document file", "err", err, "document_id", id)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) paramsFromForm(r *http.Request, filename string) (CreateParams, string) {
-	title := healthstatus.CleanString(r.FormValue("title"))
+func (h *Handler) readMultipartUpload(
+	r *http.Request,
+) (map[string]string, uploadedFile, int, string, error) {
+	reader, err := r.MultipartReader()
+	if err != nil {
+		return nil, uploadedFile{}, http.StatusBadRequest, "Upload must be multipart and under 50 MB", err
+	}
+
+	fields := map[string]string{}
+	var upload uploadedFile
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			status, detail := uploadReadResponse(err)
+			if status == 0 {
+				status = http.StatusBadRequest
+				detail = "Upload must be multipart and under 50 MB"
+			}
+			return fields, upload, status, detail, err
+		}
+
+		name := part.FormName()
+		if name == "" {
+			continue
+		}
+		if name == "file" {
+			if upload.storageName != "" {
+				return fields, upload, http.StatusUnprocessableEntity, "Only one file is allowed", nil
+			}
+			fileUpload, status, detail, err := h.writeMultipartFile(part)
+			upload = fileUpload
+			if detail != "" {
+				return fields, upload, status, detail, err
+			}
+			continue
+		}
+		if _, exists := fields[name]; exists {
+			continue
+		}
+		value, status, detail, err := readMultipartField(part)
+		if detail != "" {
+			return fields, upload, status, detail, err
+		}
+		fields[name] = value
+	}
+	if upload.storageName == "" {
+		return fields, upload, http.StatusUnprocessableEntity, "File is required", nil
+	}
+	return fields, upload, 0, "", nil
+}
+
+func (h *Handler) writeMultipartFile(part *multipart.Part) (uploadedFile, int, string, error) {
+	filename := part.FileName()
+	if healthstatus.CleanString(filename) == "" {
+		return uploadedFile{}, http.StatusUnprocessableEntity, "File is required", nil
+	}
+	storageName, err := newStorageName(filename)
+	if err != nil {
+		return uploadedFile{}, http.StatusInternalServerError, "Internal Server Error", err
+	}
+	written, shaHex, detectedType, err := writeUpload(
+		h.uploadDir,
+		storageName,
+		part,
+		part.Header.Get("content-type"),
+	)
+	if err != nil {
+		_ = removeUpload(h.uploadDir, storageName)
+		status, detail := uploadReadResponse(err)
+		if status == 0 {
+			status = http.StatusInternalServerError
+			detail = "Internal Server Error"
+		}
+		return uploadedFile{storageName: storageName}, status, detail, err
+	}
+	return uploadedFile{
+		originalFilename: filename,
+		storageName:      storageName,
+		contentType:      detectedType,
+		sizeBytes:        written,
+		sha256Hex:        shaHex,
+	}, 0, "", nil
+}
+
+func readMultipartField(src io.Reader) (string, int, string, error) {
+	value, err := io.ReadAll(io.LimitReader(src, maxFormFieldBytes+1))
+	if err != nil {
+		status, detail := uploadReadResponse(err)
+		if status == 0 {
+			status = http.StatusBadRequest
+			detail = "Upload must be multipart and under 50 MB"
+		}
+		return "", status, detail, err
+	}
+	if int64(len(value)) > maxFormFieldBytes {
+		return "", http.StatusBadRequest, "Upload form field is too large", nil
+	}
+	return string(value), 0, "", nil
+}
+
+func uploadReadResponse(err error) (int, string) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return http.StatusBadRequest, "Upload must be multipart and under 50 MB"
+	}
+	return 0, ""
+}
+
+func (h *Handler) paramsFromValues(values map[string]string, filename string) (CreateParams, string) {
+	title := healthstatus.CleanString(values["title"])
 	if title == "" {
 		title = healthstatus.CleanString(filename)
 	}
 	if title == "" {
 		return CreateParams{}, "Title is required"
 	}
-	docType := healthstatus.CleanString(r.FormValue("document_type"))
+	docType := healthstatus.CleanString(values["document_type"])
 	if docType == "" {
 		docType = "medical"
 	}
-	issuedAt, err := healthstatus.ParseOptionalDate(healthstatus.NilIfEmpty(r.FormValue("issued_at")), "issued_at")
+	issuedDate, hasIssuedDate, err := healthstatus.ParseOptionalDate(
+		healthstatus.NilIfEmpty(values["issued_at"]),
+		"issued_at",
+	)
 	if err != nil {
 		return CreateParams{}, err.Error()
 	}
-	illnessID, detail := optionalInt(r.FormValue("illness_id"), "illness_id")
+	var issuedAt *time.Time
+	if hasIssuedDate {
+		issuedAt = &issuedDate
+	}
+	illnessID, detail := optionalInt(values["illness_id"], "illness_id")
 	if detail != "" {
 		return CreateParams{}, detail
 	}
-	examinationID, detail := optionalInt(r.FormValue("examination_id"), "examination_id")
+	examinationID, detail := optionalInt(values["examination_id"], "examination_id")
 	if detail != "" {
 		return CreateParams{}, detail
 	}
@@ -174,14 +289,43 @@ func (h *Handler) paramsFromForm(r *http.Request, filename string) (CreateParams
 		Title:         title,
 		DocumentType:  docType,
 		IssuedAt:      issuedAt,
-		Notes:         healthstatus.NilIfEmpty(r.FormValue("notes")),
+		Notes:         healthstatus.NilIfEmpty(values["notes"]),
 		IllnessID:     illnessID,
 		ExaminationID: examinationID,
 	}, ""
 }
 
-func writeUpload(path string, src io.Reader, declaredType string) (int64, string, string, error) {
-	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+func openUpload(uploadDir string, storageName string) (*os.File, error) {
+	root, err := os.OpenRoot(uploadDir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return root.Open(storageName)
+}
+
+func removeUpload(uploadDir string, storageName string) error {
+	root, err := os.OpenRoot(uploadDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return root.Remove(storageName)
+}
+
+func writeUpload(
+	uploadDir string,
+	storageName string,
+	src io.Reader,
+	declaredType string,
+) (int64, string, string, error) {
+	root, err := os.OpenRoot(uploadDir)
+	if err != nil {
+		return 0, "", "", err
+	}
+	defer root.Close()
+
+	out, err := root.OpenFile(storageName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return 0, "", "", err
 	}

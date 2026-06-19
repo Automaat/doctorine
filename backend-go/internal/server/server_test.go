@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestHealthWithoutDB(t *testing.T) {
 	handler := New(Config{}, nil, Deps{})
-	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

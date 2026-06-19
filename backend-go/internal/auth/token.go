@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -35,7 +36,7 @@ func (s *TokenService) Sign(user *User, ttl time.Duration) (string, error) {
 		Name:     name,
 		IsAdmin:  user.IsAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   fmt.Sprintf("%d", user.ID),
+			Subject:   strconv.Itoa(user.ID),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},

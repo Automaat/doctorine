@@ -144,8 +144,8 @@ func initDB(
 		logger.Error("open db pool", "err", err)
 		return nil, 2
 	}
-	if err := db.ApplySchema(ctx, pool); err != nil {
-		logger.Error("apply schema", "err", err)
+	if err := db.Migrate(ctx, pool); err != nil {
+		logger.Error("run migrations", "err", err)
 		pool.Close()
 		return nil, 2
 	}
