@@ -7,6 +7,6 @@ test('login', async ({ page }) => {
 	await page.getByLabel('Password').fill(ADMIN_PASSWORD);
 	await page.getByRole('button', { name: 'Login' }).click();
 	await expect(page).toHaveURL('/');
-	await expect(page.getByRole('heading', { name: 'Health overview' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 	await page.context().storageState({ path: STORAGE_STATE });
 });

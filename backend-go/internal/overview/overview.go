@@ -49,7 +49,7 @@ func (h *Handler) load(ctx context.Context) (Response, error) {
 			(SELECT count(*) FROM documents),
 			(SELECT count(*) FROM illnesses WHERE status <> 'resolved'),
 			(SELECT count(*) FROM examinations),
-			(SELECT count(*) FROM examinations WHERE result_status IN ('attention', 'urgent'))
+			(SELECT count(*) FROM examination_results WHERE flag IS NOT NULL)
 	`).Scan(
 		&response.DocumentCount,
 		&response.IllnessCount,

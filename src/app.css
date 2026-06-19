@@ -38,6 +38,115 @@ body {
 	box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
 }
 
+.dashboard-panel {
+	border: 1px solid var(--color-surface-200);
+	border-radius: var(--radius-3);
+	background: white;
+	padding: 1rem;
+	box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+}
+
+.trend-chart {
+	aspect-ratio: 12 / 5;
+	display: block;
+	margin-block: 0.75rem 0.25rem;
+	width: 100%;
+}
+
+.trend-plot {
+	fill: var(--color-surface-50);
+	stroke: var(--color-surface-200);
+	stroke-width: 1;
+}
+
+.trend-reference {
+	fill: none;
+	stroke: var(--color-surface-400);
+	stroke-dasharray: 4 4;
+	stroke-width: 1;
+}
+
+.trend-line {
+	fill: none;
+	stroke: var(--color-primary-600);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 3;
+}
+
+.trend-point {
+	fill: white;
+	stroke: var(--color-primary-600);
+	stroke-width: 2;
+}
+
+.trend-point-flagged {
+	fill: #dc2626;
+	stroke: #7f1d1d;
+}
+
+.activity-track {
+	background: var(--color-surface-100);
+	border-radius: var(--radius-1);
+	display: flex;
+	height: 0.75rem;
+	overflow: hidden;
+}
+
+.activity-bar {
+	display: block;
+	height: 100%;
+	min-width: 0;
+}
+
+.activity-bar-normal {
+	background: var(--color-primary-500);
+}
+
+.activity-bar-flagged {
+	background: #dc2626;
+}
+
+.reminder-status {
+	border-radius: var(--radius-1);
+	display: inline-flex;
+	font-size: 0.75rem;
+	font-weight: 700;
+	line-height: 1;
+	padding: 0.3rem 0.45rem;
+	white-space: nowrap;
+}
+
+.reminder-status-due {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.reminder-status-soon {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.reminder-status-ok {
+	background: color-mix(in srgb, var(--color-primary-500) 12%, white);
+	color: var(--color-primary-700);
+}
+
+.reminder-status-complete {
+	background: color-mix(in srgb, var(--color-primary-500) 12%, white);
+	color: var(--color-primary-700);
+}
+
+.reminder-status-missing {
+	background: var(--color-surface-100);
+	color: var(--color-surface-700);
+}
+
+.reminder-status-directed {
+	background: var(--color-surface-100);
+	color: var(--color-surface-700);
+}
+
 .data-table {
 	width: 100%;
 	border-collapse: separate;
@@ -57,6 +166,11 @@ body {
 	font-size: 0.75rem;
 	font-weight: 700;
 	text-transform: uppercase;
+}
+
+.compact-table th,
+.compact-table td {
+	padding: 0.55rem 0.65rem;
 }
 
 .result-row-abnormal {

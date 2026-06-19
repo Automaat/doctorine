@@ -7,7 +7,7 @@
 	let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
 	const nav = [
-		{ href: '/', label: 'Overview', icon: Activity },
+		{ href: '/', label: 'Dashboard', icon: Activity },
 		{ href: '/documents', label: 'Documents', icon: FileText },
 		{ href: '/examinations', label: 'Exams', icon: Stethoscope },
 		{ href: '/illnesses', label: 'Illnesses', icon: HeartPulse }
