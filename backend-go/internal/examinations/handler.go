@@ -63,6 +63,24 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, items)
 }
 
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	item, err := h.store.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrExaminationNotFound) {
+			httputil.WriteDetailError(w, http.StatusNotFound, "Examination not found")
+			return
+		}
+		h.logger.Error("get examination", "err", err)
+		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, item)
+}
+
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
 	if err := httputil.DecodeJSON(r, &req); err != nil {

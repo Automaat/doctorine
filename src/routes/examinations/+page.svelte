@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { formatDate } from '$lib/format';
-	import type { ExaminationResult, ResultDefinition } from '$lib/types';
+	import type { ResultDefinition } from '$lib/types';
 	import { Plus, Trash2 } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
@@ -34,7 +33,6 @@
 	let activeResultID = $state<number | null>(null);
 	let deletingId = $state<number | null>(null);
 	let nextResultID = 1;
-	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
 	const fallbackUnitOptions = [
 		'%',
 		'g/dl',
@@ -318,44 +316,8 @@
 		await invalidateAll();
 	}
 
-	function resultValue(result: ExaminationResult): string {
-		if (result.value_text) return result.value_text;
-		if (result.value_numeric === null) return '-';
-		return `${result.value_prefix ?? ''}${numberFormat.format(result.value_numeric)}`;
-	}
-
-	function resultFlag(result: ExaminationResult): string | null {
-		if (result.flag) return result.flag;
-		if (result.value_numeric === null) return null;
-		if (result.reference_min !== null && result.value_numeric < result.reference_min) return 'L';
-		if (result.reference_max !== null && result.value_numeric > result.reference_max) return 'H';
-		if (
-			(result.value_prefix === '<' || result.value_prefix === '<=') &&
-			result.reference_min !== null &&
-			result.value_numeric <= result.reference_min
-		) {
-			return 'L';
-		}
-		if (
-			(result.value_prefix === '>' || result.value_prefix === '>=') &&
-			result.reference_max !== null &&
-			result.value_numeric >= result.reference_max
-		) {
-			return 'H';
-		}
-		return null;
-	}
-
-	function resultRange(result: ExaminationResult): string {
-		if (result.reference_min === null && result.reference_max === null) return '-';
-		if (result.reference_min === null)
-			return `<= ${numberFormat.format(result.reference_max ?? 0)}`;
-		if (result.reference_max === null) return `>= ${numberFormat.format(result.reference_min)}`;
-		return `${numberFormat.format(result.reference_min)}-${numberFormat.format(result.reference_max)}`;
-	}
-
-	function isBeyondNorm(result: ExaminationResult): boolean {
-		return resultFlag(result) !== null;
+	function examinationSummary(summary: string | null): string {
+		return summary ?? 'No summary.';
 	}
 </script>
 
@@ -503,84 +465,27 @@
 		</div>
 	</form>
 
-	<div class="table-cards overflow-x-auto rounded-md border border-surface-200 bg-white">
-		<table class="data-table md:min-w-[56rem]">
-			<thead>
-				<tr>
-					<th>Exam</th>
-					<th>Date</th>
-					<th>Status</th>
-					<th>Facility</th>
-					<th>Actions</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#if data.examinations.length === 0}
-					<tr>
-						<td colspan="5" class="text-sm text-surface-700">No examinations recorded.</td>
-					</tr>
-				{:else}
-					{#each data.examinations as examination}
-						<tr>
-							<td data-label="Exam">
-								<div class="font-semibold">{examination.title}</div>
-								{#if examination.summary}
-									<div class="text-sm text-surface-700">{examination.summary}</div>
-								{/if}
-								{#if examination.results.length > 0}
-									<div class="mt-3 overflow-x-auto rounded-md border border-surface-200">
-										<div
-											class="grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] bg-surface-50 text-sm font-semibold"
-										>
-											<div class="px-3 py-2">Result</div>
-											<div class="px-3 py-2">Value</div>
-											<div class="px-3 py-2">Unit</div>
-											<div class="px-3 py-2">Range</div>
-											<div class="px-3 py-2">Flag</div>
-										</div>
-										{#each examination.results as result}
-											<div
-												class={[
-													'grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] border-t border-surface-200 text-sm',
-													isBeyondNorm(result) ? 'result-row-abnormal' : ''
-												]}
-											>
-												<div class="px-3 py-2">{result.name}</div>
-												<div class="px-3 py-2 font-semibold">{resultValue(result)}</div>
-												<div class="px-3 py-2">{result.unit ?? '-'}</div>
-												<div class="px-3 py-2">{resultRange(result)}</div>
-												<div class="px-3 py-2">
-													{#if resultFlag(result)}
-														<span class="result-flag-abnormal">{resultFlag(result)}</span>
-													{:else}
-														-
-													{/if}
-												</div>
-											</div>
-										{/each}
-									</div>
-								{/if}
-							</td>
-							<td data-label="Date">{formatDate(examination.exam_date)}</td>
-							<td data-label="Status">{examination.result_status}</td>
-							<td data-label="Facility">{examination.facility ?? '-'}</td>
-							<td data-label="Actions">
-								<div class="flex justify-end">
-									<button
-										type="button"
-										class="btn-icon btn-icon-sm"
-										aria-label="Delete examination"
-										disabled={deletingId === examination.id}
-										onclick={() => removeExamination(examination.id, examination.title)}
-									>
-										<Trash2 size={18} />
-									</button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				{/if}
-			</tbody>
-		</table>
+	<div class="overflow-hidden rounded-md border border-surface-200 bg-white">
+		{#if data.examinations.length === 0}
+			<p class="p-4 text-sm text-surface-700">No examinations recorded.</p>
+		{:else}
+			{#each data.examinations as examination}
+				<div class="flex items-center gap-3 border-b border-surface-200 last:border-b-0">
+					<a href={`/examinations/${examination.id}`} class="block min-w-0 flex-1 p-4">
+						<div class="font-semibold text-surface-950">{examination.title}</div>
+						<div class="text-sm text-surface-700">{examinationSummary(examination.summary)}</div>
+					</a>
+					<button
+						type="button"
+						class="btn-icon btn-icon-sm mr-3"
+						aria-label="Delete examination"
+						disabled={deletingId === examination.id}
+						onclick={() => removeExamination(examination.id, examination.title)}
+					>
+						<Trash2 size={18} />
+					</button>
+				</div>
+			{/each}
+		{/if}
 	</div>
 </section>

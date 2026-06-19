@@ -109,6 +109,30 @@ func (s *Store) Create(ctx context.Context, params CreateParams) (Examination, e
 	return item, nil
 }
 
+func (s *Store) Get(ctx context.Context, id int) (Examination, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, title, exam_date, category, facility, result_status, summary, notes, created_at, updated_at
+		FROM examinations
+		WHERE id = $1
+	`, id)
+	item, err := scanExamination(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Examination{}, ErrExaminationNotFound
+		}
+		return Examination{}, err
+	}
+	results, err := s.listResults(ctx, []int{id})
+	if err != nil {
+		return Examination{}, err
+	}
+	item.Results = results
+	if item.Results == nil {
+		item.Results = []Result{}
+	}
+	return item, nil
+}
+
 func (s *Store) Delete(ctx context.Context, id int) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM examinations WHERE id = $1`, id)
 	if err != nil {

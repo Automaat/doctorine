@@ -109,6 +109,7 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		r.Get("/api/illnesses", illnessHandler.List)
 		r.Post("/api/illnesses", illnessHandler.Create)
 		r.Get("/api/examinations", examinationHandler.List)
+		r.Get("/api/examinations/{id}", examinationHandler.Get)
 		r.Post("/api/examinations", examinationHandler.Create)
 		r.Delete("/api/examinations/{id}", examinationHandler.Delete)
 		r.Get("/api/documents", documentsHandler.List)
