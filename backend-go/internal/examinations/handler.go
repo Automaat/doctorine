@@ -220,18 +220,22 @@ func computeFlag(value *float64, prefix *string, referenceMin *float64, referenc
 		return nil
 	}
 	if referenceMin != nil && *value < *referenceMin {
-		return computedFlag("L")
+		flag := "L"
+		return &flag
 	}
 	if referenceMax != nil && *value > *referenceMax {
-		return computedFlag("H")
+		flag := "H"
+		return &flag
 	}
 	if prefix != nil && (*prefix == "<" || *prefix == "<=") &&
 		referenceMin != nil && *value <= *referenceMin {
-		return computedFlag("L")
+		flag := "L"
+		return &flag
 	}
 	if prefix != nil && (*prefix == ">" || *prefix == ">=") &&
 		referenceMax != nil && *value >= *referenceMax {
-		return computedFlag("H")
+		flag := "H"
+		return &flag
 	}
 	return nil
 }
@@ -241,10 +245,6 @@ func cleanOptional(value *string) *string {
 		return nil
 	}
 	return healthstatus.NilIfEmpty(*value)
-}
-
-func computedFlag(value string) *string {
-	return &value
 }
 
 func parseID(w http.ResponseWriter, raw string) (int, bool) {

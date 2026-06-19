@@ -30,15 +30,15 @@ func ParseDate(value string, field string) (time.Time, error) {
 	return parsed, nil
 }
 
-func ParseOptionalDate(value *string, field string) (*time.Time, error) {
+func ParseOptionalDate(value *string, field string) (time.Time, bool, error) {
 	if value == nil || strings.TrimSpace(*value) == "" {
-		return nil, nil
+		return time.Time{}, false, nil
 	}
 	parsed, err := ParseDate(*value, field)
 	if err != nil {
-		return nil, err
+		return time.Time{}, false, err
 	}
-	return &parsed, nil
+	return parsed, true, nil
 }
 
 func FormatDate(value pgtype.Date) *string {

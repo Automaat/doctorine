@@ -3,6 +3,7 @@ package illnesses
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/Automaat/doctorine/backend-go/internal/healthstatus"
 	"github.com/Automaat/doctorine/backend-go/internal/httputil"
@@ -74,13 +75,21 @@ func validateCreate(req createRequest) (CreateParams, string) {
 	if status != "active" && status != "monitoring" && status != "resolved" {
 		return CreateParams{}, "Status must be active, monitoring, or resolved"
 	}
-	diagnosedOn, err := healthstatus.ParseOptionalDate(req.DiagnosedOn, "diagnosed_on")
+	diagnosedDate, hasDiagnosedDate, err := healthstatus.ParseOptionalDate(req.DiagnosedOn, "diagnosed_on")
 	if err != nil {
 		return CreateParams{}, err.Error()
 	}
-	resolvedOn, err := healthstatus.ParseOptionalDate(req.ResolvedOn, "resolved_on")
+	resolvedDate, hasResolvedDate, err := healthstatus.ParseOptionalDate(req.ResolvedOn, "resolved_on")
 	if err != nil {
 		return CreateParams{}, err.Error()
+	}
+	var diagnosedOn *time.Time
+	if hasDiagnosedDate {
+		diagnosedOn = &diagnosedDate
+	}
+	var resolvedOn *time.Time
+	if hasResolvedDate {
+		resolvedOn = &resolvedDate
 	}
 	return CreateParams{
 		Title:       title,

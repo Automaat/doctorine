@@ -13,8 +13,10 @@ import (
 	"github.com/Automaat/doctorine/backend-go/internal/healthstatus"
 )
 
-var ErrResultDefinitionNotFound = errors.New("result definition not found")
-var ErrExaminationNotFound = errors.New("examination not found")
+var (
+	ErrResultDefinitionNotFound = errors.New("result definition not found")
+	ErrExaminationNotFound      = errors.New("examination not found")
+)
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -74,7 +76,9 @@ func (s *Store) Create(ctx context.Context, params CreateParams) (Examination, e
 	if err != nil {
 		return Examination{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	row := tx.QueryRow(ctx, `
 		INSERT INTO examinations (title, exam_date, category, facility, result_status, summary, notes)
