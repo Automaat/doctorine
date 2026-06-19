@@ -2,33 +2,175 @@
 	import { invalidateAll } from '$app/navigation';
 	import { formatDate } from '$lib/format';
 	import type { ExaminationResult } from '$lib/types';
-	import { Plus } from 'lucide-svelte';
+	import { Plus, Trash2 } from 'lucide-svelte';
 	import type { PageData } from './$types';
+
+	type ResultDraft = {
+		id: number;
+		testKey: string;
+		name: string;
+		value: string;
+		valuePrefix: string;
+		unit: string;
+		referenceMin: string;
+		referenceMax: string;
+		flag: string;
+	};
+
+	type ResultPayload = {
+		test_key: string;
+		name: string;
+		value_text: string | null;
+		value_numeric: number | null;
+		value_prefix: string | null;
+		unit: string | null;
+		reference_min: number | null;
+		reference_max: number | null;
+		flag: string | null;
+		display_order: number;
+	};
 
 	let { data }: { data: PageData } = $props();
 	let error = $state('');
 	let saving = $state(false);
+	let resultDrafts = $state<ResultDraft[]>([]);
+	let nextResultID = 1;
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
 
-	function value(form: FormData, key: string): string | null {
+	function formValue(form: FormData, key: string): string | null {
 		const raw = String(form.get(key) ?? '').trim();
 		return raw === '' ? null : raw;
+	}
+
+	function emptyResultDraft(): ResultDraft {
+		const id = nextResultID;
+		nextResultID += 1;
+		return {
+			id,
+			testKey: '',
+			name: '',
+			value: '',
+			valuePrefix: '',
+			unit: '',
+			referenceMin: '',
+			referenceMax: '',
+			flag: ''
+		};
+	}
+
+	function addResultRow() {
+		resultDrafts = [...resultDrafts, emptyResultDraft()];
+	}
+
+	function removeResultRow(id: number) {
+		resultDrafts = resultDrafts.filter((result) => result.id !== id);
+	}
+
+	function resetResults() {
+		resultDrafts = [];
+		nextResultID = 1;
+	}
+
+	function parseOptionalNumber(raw: string): number | null {
+		const cleaned = raw.trim().replace(',', '.');
+		if (cleaned === '') return null;
+		const parsed = Number(cleaned);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+
+	function parseNumericValue(raw: string): number | null {
+		const cleaned = raw
+			.trim()
+			.replace(',', '.')
+			.replace(/^[<>]=?/, '');
+		if (cleaned === '') return null;
+		const parsed = Number(cleaned);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+
+	function inferredPrefix(raw: string, selected: string): string | null {
+		if (selected !== '') return selected;
+		const match = raw.trim().match(/^(<=|>=|<|>)/);
+		return match?.[1] ?? null;
+	}
+
+	function slugifyKey(raw: string): string {
+		return raw
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '_')
+			.replace(/^_+|_+$/g, '');
+	}
+
+	function buildResults(): { results: ResultPayload[]; detail: string } {
+		const results: ResultPayload[] = [];
+		const keys = new Set<string>();
+		for (const [index, draft] of resultDrafts.entries()) {
+			const name = draft.name.trim();
+			const rawValue = draft.value.trim();
+			const hasAnyValue = [
+				draft.testKey,
+				draft.name,
+				draft.value,
+				draft.valuePrefix,
+				draft.unit,
+				draft.referenceMin,
+				draft.referenceMax,
+				draft.flag
+			].some((field) => field.trim() !== '');
+			if (!hasAnyValue) continue;
+			if (name === '' || rawValue === '') {
+				return { results: [], detail: 'Each result needs name and value' };
+			}
+			const testKey = slugifyKey(draft.testKey || name);
+			if (testKey === '') return { results: [], detail: 'Each result needs a valid key' };
+			if (keys.has(testKey)) return { results: [], detail: 'Result keys must be unique' };
+			keys.add(testKey);
+			const referenceMin = parseOptionalNumber(draft.referenceMin);
+			const referenceMax = parseOptionalNumber(draft.referenceMax);
+			if (draft.referenceMin.trim() !== '' && referenceMin === null) {
+				return { results: [], detail: 'Result minimum must be numeric' };
+			}
+			if (draft.referenceMax.trim() !== '' && referenceMax === null) {
+				return { results: [], detail: 'Result maximum must be numeric' };
+			}
+			results.push({
+				test_key: testKey,
+				name,
+				value_text: rawValue,
+				value_numeric: parseNumericValue(rawValue),
+				value_prefix: inferredPrefix(rawValue, draft.valuePrefix),
+				unit: draft.unit.trim() || null,
+				reference_min: referenceMin,
+				reference_max: referenceMax,
+				flag: draft.flag.trim() || null,
+				display_order: index + 1
+			});
+		}
+		return { results, detail: '' };
 	}
 
 	async function createExamination(event: SubmitEvent) {
 		event.preventDefault();
 		error = '';
+		const { results, detail } = buildResults();
+		if (detail !== '') {
+			error = detail;
+			return;
+		}
 		saving = true;
 		const formEl = event.currentTarget as HTMLFormElement;
 		const form = new FormData(formEl);
 		const payload = {
-			title: value(form, 'title'),
-			exam_date: value(form, 'exam_date'),
-			category: value(form, 'category'),
-			facility: value(form, 'facility'),
-			result_status: value(form, 'result_status'),
-			summary: value(form, 'summary'),
-			notes: value(form, 'notes')
+			title: formValue(form, 'title'),
+			exam_date: formValue(form, 'exam_date'),
+			category: formValue(form, 'category'),
+			facility: formValue(form, 'facility'),
+			result_status: formValue(form, 'result_status'),
+			summary: formValue(form, 'summary'),
+			notes: formValue(form, 'notes'),
+			results
 		};
 		const response = await fetch('/api/examinations', {
 			method: 'POST',
@@ -42,6 +184,7 @@
 			return;
 		}
 		formEl.reset();
+		resetResults();
 		await invalidateAll();
 	}
 
@@ -57,6 +200,20 @@
 			return `<= ${numberFormat.format(result.reference_max ?? 0)}`;
 		if (result.reference_max === null) return `>= ${numberFormat.format(result.reference_min)}`;
 		return `${numberFormat.format(result.reference_min)}-${numberFormat.format(result.reference_max)}`;
+	}
+
+	function isBeyondNorm(result: ExaminationResult): boolean {
+		if (result.flag) return true;
+		if (result.value_numeric === null) return false;
+		if (result.reference_min !== null && result.value_numeric < result.reference_min) return true;
+		if (result.reference_max !== null && result.value_numeric > result.reference_max) return true;
+		if (result.value_prefix === '<' || result.value_prefix === '<=') {
+			return result.reference_min !== null && result.value_numeric <= result.reference_min;
+		}
+		if (result.value_prefix === '>' || result.value_prefix === '>=') {
+			return result.reference_max !== null && result.value_numeric >= result.reference_max;
+		}
+		return false;
 	}
 </script>
 
@@ -103,6 +260,76 @@
 			<span class="text-sm font-semibold">Notes</span>
 			<textarea name="notes" class="textarea" rows="3"></textarea>
 		</label>
+		<div class="space-y-3 border-t border-surface-200 pt-4 md:col-span-2">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<h2 class="section-title">Structured results</h2>
+				<button type="button" class="btn preset-tonal-primary-500" onclick={addResultRow}>
+					<Plus size={18} />
+					<span>Add result</span>
+				</button>
+			</div>
+			{#if resultDrafts.length > 0}
+				<div class="space-y-3">
+					{#each resultDrafts as result}
+						<div class="grid gap-3 border-t border-surface-200 pt-3 md:grid-cols-12">
+							<label class="label md:col-span-2">
+								<span class="text-sm font-semibold">Key</span>
+								<input
+									bind:value={result.testKey}
+									class="input"
+									maxlength="120"
+									placeholder="ast"
+								/>
+							</label>
+							<label class="label md:col-span-3">
+								<span class="text-sm font-semibold">Name</span>
+								<input bind:value={result.name} class="input" maxlength="200" placeholder="AST" />
+							</label>
+							<label class="label md:col-span-2">
+								<span class="text-sm font-semibold">Value</span>
+								<input bind:value={result.value} class="input" maxlength="120" placeholder="44" />
+							</label>
+							<label class="label md:col-span-1">
+								<span class="text-sm font-semibold">Prefix</span>
+								<select bind:value={result.valuePrefix} class="select">
+									<option value="">=</option>
+									<option value="<">&lt;</option>
+									<option value=">">&gt;</option>
+									<option value="<=">&lt;=</option>
+									<option value=">=">&gt;=</option>
+								</select>
+							</label>
+							<label class="label md:col-span-2">
+								<span class="text-sm font-semibold">Unit</span>
+								<input bind:value={result.unit} class="input" maxlength="80" placeholder="U/l" />
+							</label>
+							<label class="label md:col-span-1">
+								<span class="text-sm font-semibold">Min</span>
+								<input bind:value={result.referenceMin} class="input" inputmode="decimal" />
+							</label>
+							<label class="label md:col-span-1">
+								<span class="text-sm font-semibold">Max</span>
+								<input bind:value={result.referenceMax} class="input" inputmode="decimal" />
+							</label>
+							<label class="label md:col-span-2">
+								<span class="text-sm font-semibold">Flag</span>
+								<input bind:value={result.flag} class="input" maxlength="20" placeholder="H" />
+							</label>
+							<div class="flex items-end md:col-span-2">
+								<button
+									type="button"
+									class="btn preset-tonal-error-500"
+									aria-label="Remove result"
+									onclick={() => removeResultRow(result.id)}
+								>
+									<Trash2 size={18} />
+								</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
 		<div class="flex items-center gap-3 md:col-span-2">
 			<button type="submit" class="btn preset-filled-primary-500" disabled={saving}>
 				<Plus size={18} />
@@ -150,7 +377,10 @@
 										</div>
 										{#each examination.results as result}
 											<div
-												class="grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] border-t border-surface-200 text-sm"
+												class={[
+													'grid min-w-[40rem] grid-cols-[minmax(12rem,1fr)_7rem_7rem_9rem_4rem] border-t border-surface-200 text-sm',
+													isBeyondNorm(result) ? 'bg-error-50 text-error-900' : ''
+												]}
 											>
 												<div class="px-3 py-2">{result.name}</div>
 												<div class="px-3 py-2 font-semibold">{resultValue(result)}</div>
@@ -158,7 +388,7 @@
 												<div class="px-3 py-2">{resultRange(result)}</div>
 												<div class="px-3 py-2">
 													{#if result.flag}
-														<span class="font-semibold text-warning-700">{result.flag}</span>
+														<span class="font-semibold text-error-700">{result.flag}</span>
 													{:else}
 														-
 													{/if}
