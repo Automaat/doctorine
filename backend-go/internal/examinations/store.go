@@ -14,6 +14,7 @@ import (
 )
 
 var ErrResultDefinitionNotFound = errors.New("result definition not found")
+var ErrExaminationNotFound = errors.New("examination not found")
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -106,6 +107,17 @@ func (s *Store) Create(ctx context.Context, params CreateParams) (Examination, e
 		return Examination{}, err
 	}
 	return item, nil
+}
+
+func (s *Store) Delete(ctx context.Context, id int) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM examinations WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrExaminationNotFound
+	}
+	return nil
 }
 
 func (s *Store) listResults(ctx context.Context, examinationIDs []int) ([]Result, error) {

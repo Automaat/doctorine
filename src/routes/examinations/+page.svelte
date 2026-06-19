@@ -32,6 +32,7 @@
 	let saving = $state(false);
 	let resultDrafts = $state<ResultDraft[]>([]);
 	let activeResultID = $state<number | null>(null);
+	let deletingId = $state<number | null>(null);
 	let nextResultID = 1;
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 });
 	const fallbackUnitOptions = [
@@ -303,6 +304,20 @@
 		await invalidateAll();
 	}
 
+	async function removeExamination(id: number, title: string) {
+		if (!window.confirm(`Remove examination "${title}"?`)) return;
+		error = '';
+		deletingId = id;
+		const response = await fetch(`/api/examinations/${id}`, { method: 'DELETE' });
+		deletingId = null;
+		if (!response.ok) {
+			const body = (await response.json().catch(() => null)) as { detail?: string } | null;
+			error = body?.detail ?? 'Delete failed';
+			return;
+		}
+		await invalidateAll();
+	}
+
 	function resultValue(result: ExaminationResult): string {
 		if (result.value_text) return result.value_text;
 		if (result.value_numeric === null) return '-';
@@ -496,12 +511,13 @@
 					<th>Date</th>
 					<th>Status</th>
 					<th>Facility</th>
+					<th>Actions</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#if data.examinations.length === 0}
 					<tr>
-						<td colspan="4" class="text-sm text-surface-700">No examinations recorded.</td>
+						<td colspan="5" class="text-sm text-surface-700">No examinations recorded.</td>
 					</tr>
 				{:else}
 					{#each data.examinations as examination}
@@ -548,6 +564,19 @@
 							<td data-label="Date">{formatDate(examination.exam_date)}</td>
 							<td data-label="Status">{examination.result_status}</td>
 							<td data-label="Facility">{examination.facility ?? '-'}</td>
+							<td>
+								<div class="flex justify-end">
+									<button
+										type="button"
+										class="btn-icon btn-icon-sm"
+										aria-label="Delete examination"
+										disabled={deletingId === examination.id}
+										onclick={() => removeExamination(examination.id, examination.title)}
+									>
+										<Trash2 size={18} />
+									</button>
+								</div>
+							</td>
 						</tr>
 					{/each}
 				{/if}
