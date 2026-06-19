@@ -132,7 +132,17 @@ body {
 	color: var(--color-primary-700);
 }
 
+.reminder-status-complete {
+	background: color-mix(in srgb, var(--color-primary-500) 12%, white);
+	color: var(--color-primary-700);
+}
+
 .reminder-status-missing {
+	background: var(--color-surface-100);
+	color: var(--color-surface-700);
+}
+
+.reminder-status-directed {
 	background: var(--color-surface-100);
 	color: var(--color-surface-700);
 }

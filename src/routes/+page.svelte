@@ -43,7 +43,8 @@
 	type ReminderRule = {
 		label: string;
 		testKeys: string[];
-		cadenceMonths: number;
+		kind: 'recurring' | 'one_time' | 'doctor_directed';
+		cadenceMonths: number | null;
 		reason: string;
 	};
 
@@ -52,7 +53,7 @@
 		dueDate: string | null;
 		daysRemaining: number | null;
 		href: string | null;
-		status: 'missing' | 'due' | 'soon' | 'ok';
+		status: 'missing' | 'due' | 'soon' | 'ok' | 'complete' | 'directed';
 	};
 
 	const chartWidth = 360;
@@ -70,34 +71,168 @@
 	];
 	const reminderRules: ReminderRule[] = [
 		{
+			label: 'Blood pressure',
+			testKeys: [
+				'blood_pressure',
+				'blood_pressure_systolic',
+				'blood_pressure_diastolic',
+				'cisnienie_tetnicze',
+				'cisnienie_skurczowe',
+				'cisnienie_rozkurczowe'
+			],
+			kind: 'recurring',
+			cadenceMonths: 36,
+			reason: 'Adult screening'
+		},
+		{
+			label: 'Dental check',
+			testKeys: ['dental_exam', 'stomatolog', 'przeglad_stomatologiczny'],
+			kind: 'recurring',
+			cadenceMonths: 12,
+			reason: 'Preventive care'
+		},
+		{
+			label: 'Eye exam',
+			testKeys: ['eye_exam', 'badanie_wzroku', 'okulista'],
+			kind: 'recurring',
+			cadenceMonths: 60,
+			reason: 'Vision screening'
+		},
+		{
 			label: 'TSH',
 			testKeys: ['tsh'],
+			kind: 'recurring',
 			cadenceMonths: 12,
 			reason: 'Niedoczynność tarczycy'
 		},
 		{
 			label: 'Vitamin B12',
 			testKeys: ['witamina_b12'],
+			kind: 'recurring',
 			cadenceMonths: 12,
 			reason: 'Vegetarian diet'
 		},
 		{
-			label: 'Ferritin',
-			testKeys: ['ferrytyna'],
+			label: 'Iron stores',
+			testKeys: ['ferrytyna', 'zelazo', 'transferyna', 'tibc'],
+			kind: 'recurring',
 			cadenceMonths: 12,
-			reason: 'Iron stores'
+			reason: 'Vegetarian diet'
 		},
 		{
 			label: 'Blood count',
-			testKeys: ['hemoglobina', 'erytrocyty', 'hematokryt', 'leukocyty'],
+			testKeys: ['hemoglobina', 'erytrocyty', 'hematokryt', 'leukocyty', 'plytki_krwi'],
+			kind: 'recurring',
 			cadenceMonths: 12,
 			reason: 'CBC baseline'
 		},
 		{
 			label: 'Vitamin D',
-			testKeys: ['witamina_d_25_oh'],
+			testKeys: ['witamina_d_25_oh', '25_oh_witamina_d', 'witamina_d'],
+			kind: 'recurring',
 			cadenceMonths: 12,
 			reason: 'Vegetarian diet'
+		},
+		{
+			label: 'Folate',
+			testKeys: ['kwas_foliowy', 'foliany'],
+			kind: 'recurring',
+			cadenceMonths: 24,
+			reason: 'Nutrition check'
+		},
+		{
+			label: 'Lipid panel',
+			testKeys: [
+				'cholesterol_calkowity',
+				'cholesterol_ldl',
+				'ldl_cholesterol',
+				'cholesterol_hdl',
+				'hdl_cholesterol',
+				'cholesterol_nie_hdl',
+				'triglicerydy'
+			],
+			kind: 'recurring',
+			cadenceMonths: 48,
+			reason: 'Cardiovascular risk'
+		},
+		{
+			label: 'Glucose / HbA1c',
+			testKeys: ['glukoza', 'hba1c', 'hemoglobina_glikowana'],
+			kind: 'recurring',
+			cadenceMonths: 36,
+			reason: 'Metabolic screening'
+		},
+		{
+			label: 'Kidney + electrolytes',
+			testKeys: ['kreatynina', 'egfr', 'sod', 'potas', 'mocznik'],
+			kind: 'recurring',
+			cadenceMonths: 24,
+			reason: 'Basic chemistry'
+		},
+		{
+			label: 'Liver enzymes',
+			testKeys: ['alt', 'alat', 'ast', 'aspat', 'ggtp', 'ggt', 'bilirubina_calkowita'],
+			kind: 'recurring',
+			cadenceMonths: 12,
+			reason: 'Prior AST flag'
+		},
+		{
+			label: 'Urinalysis',
+			testKeys: [
+				'mocz_ph',
+				'mocz_ciezar_wlasciwy',
+				'mocz_bialko',
+				'mocz_glukoza',
+				'mocz_leukocyty',
+				'mocz_erytrocyty',
+				'mocz_azotyny',
+				'mocz_urobilinogen'
+			],
+			kind: 'recurring',
+			cadenceMonths: 24,
+			reason: 'Urine screen'
+		},
+		{
+			label: 'HIV screen',
+			testKeys: ['hiv', 'hiv_ag_ab', 'hiv_1_2'],
+			kind: 'one_time',
+			cadenceMonths: null,
+			reason: 'Once, risk-based repeat'
+		},
+		{
+			label: 'Hepatitis C screen',
+			testKeys: ['hcv', 'anty_hcv', 'hcv_ab', 'przeciwciala_hcv'],
+			kind: 'one_time',
+			cadenceMonths: null,
+			reason: 'Once adult screen'
+		},
+		{
+			label: 'Inflammation markers',
+			testKeys: ['crp', 'crp_ilosciowo', 'crp_met_immunochemiczna', 'ob'],
+			kind: 'doctor_directed',
+			cadenceMonths: null,
+			reason: 'Symptoms/follow-up'
+		},
+		{
+			label: 'Thyroid antibodies',
+			testKeys: ['anty_tpo', 'anty_tg'],
+			kind: 'doctor_directed',
+			cadenceMonths: null,
+			reason: 'Diagnosis context'
+		},
+		{
+			label: 'Sex hormones',
+			testKeys: ['testosteron', 'prolaktyna', 'estradiol', 'fsh', 'lh'],
+			kind: 'doctor_directed',
+			cadenceMonths: null,
+			reason: 'Symptoms/follow-up'
+		},
+		{
+			label: 'Colorectal screen',
+			testKeys: ['kolonoskopia', 'fit', 'krew_utajona_w_kale'],
+			kind: 'doctor_directed',
+			cadenceMonths: null,
+			reason: 'Age/risk-based'
 		}
 	];
 	const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
@@ -229,9 +364,12 @@
 	}
 
 	function reminderStatus(
+		rule: ReminderRule,
 		lastDate: string | null,
 		daysRemaining: number | null
 	): ReminderItem['status'] {
+		if (rule.kind === 'doctor_directed') return 'directed';
+		if (rule.kind === 'one_time') return lastDate === null ? 'missing' : 'complete';
 		if (lastDate === null || daysRemaining === null) return 'missing';
 		if (daysRemaining < 0) return 'due';
 		if (daysRemaining <= 90) return 'soon';
@@ -239,7 +377,7 @@
 	}
 
 	function buildReminders(): ReminderItem[] {
-		const statusOrder = { due: 0, missing: 1, soon: 2, ok: 3 };
+		const statusOrder = { due: 0, missing: 1, soon: 2, ok: 3, complete: 4, directed: 5 };
 		return reminderRules
 			.map((rule) => {
 				const latest = rows
@@ -248,7 +386,10 @@
 						right.examination.exam_date.localeCompare(left.examination.exam_date)
 					)[0];
 				const lastDate = latest?.examination.exam_date ?? null;
-				const dueDate = lastDate === null ? null : addMonths(lastDate, rule.cadenceMonths);
+				const dueDate =
+					rule.kind === 'recurring' && rule.cadenceMonths !== null && lastDate !== null
+						? addMonths(lastDate, rule.cadenceMonths)
+						: null;
 				const daysRemaining = dueDate === null ? null : daysBetween(todayDate, dueDate);
 				return {
 					...rule,
@@ -256,7 +397,7 @@
 					dueDate,
 					daysRemaining,
 					href: latest === undefined ? null : `/examinations/${latest.examination.id}`,
-					status: reminderStatus(lastDate, daysRemaining)
+					status: reminderStatus(rule, lastDate, daysRemaining)
 				};
 			})
 			.sort(
@@ -267,12 +408,23 @@
 	}
 
 	function reminderStatusLabel(reminder: ReminderItem): string {
-		if (reminder.status === 'missing') return 'Missing';
+		if (reminder.status === 'directed') return 'As needed';
+		if (reminder.status === 'complete') return 'Recorded';
+		if (reminder.status === 'missing')
+			return reminder.kind === 'one_time' ? 'Not recorded' : 'Missing';
 		if (reminder.daysRemaining === null) return 'Missing';
 		if (reminder.daysRemaining < 0) return `${Math.abs(reminder.daysRemaining)}d overdue`;
 		if (reminder.daysRemaining === 0) return 'Due today';
 		if (reminder.daysRemaining <= 90) return `Due in ${reminder.daysRemaining}d`;
 		return 'Scheduled';
+	}
+
+	function reminderScheduleLabel(reminder: ReminderItem): string {
+		if (reminder.kind === 'recurring' && reminder.cadenceMonths !== null) {
+			return `Every ${reminder.cadenceMonths} months`;
+		}
+		if (reminder.kind === 'one_time') return 'One-time';
+		return 'Doctor-led';
 	}
 
 	function lastYearCutoffDate(): string {
@@ -539,7 +691,7 @@
 				<div class="mb-3 flex items-center justify-between gap-3">
 					<div>
 						<h2 class="section-title">Exam reminders</h2>
-						<div class="text-xs text-surface-600">TSH + vegetarian labs</div>
+						<div class="text-xs text-surface-600">Routine + doctor-directed checks</div>
 					</div>
 					<CalendarCheck class="text-surface-500" size={18} />
 				</div>
@@ -556,7 +708,7 @@
 										<div class="font-semibold">{reminder.label}</div>
 									{/if}
 									<div class="text-xs text-surface-600">
-										Every {reminder.cadenceMonths} months · {reminder.reason}
+										{reminderScheduleLabel(reminder)} · {reminder.reason}
 									</div>
 								</div>
 								<span class={['reminder-status', `reminder-status-${reminder.status}`]}>
