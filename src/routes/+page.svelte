@@ -340,10 +340,7 @@
 	}
 
 	function isoDate(date: Date): string {
-		const year = date.getFullYear();
-		const month = String(date.getMonth() + 1).padStart(2, '0');
-		const day = String(date.getDate()).padStart(2, '0');
-		return `${year}-${month}-${day}`;
+		return date.toISOString().slice(0, 10);
 	}
 
 	function addMonths(date: string, months: number): string {
@@ -427,13 +424,14 @@
 		return 'Doctor-led';
 	}
 
+	function reminderStatusClass(reminder: ReminderItem): string {
+		return `reminder-status reminder-status-${reminder.status}`;
+	}
+
 	function lastYearCutoffDate(): string {
 		const cutoff = new Date();
-		cutoff.setFullYear(cutoff.getFullYear() - 1);
-		const year = cutoff.getFullYear();
-		const month = String(cutoff.getMonth() + 1).padStart(2, '0');
-		const day = String(cutoff.getDate()).padStart(2, '0');
-		return `${year}-${month}-${day}`;
+		cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
+		return isoDate(cutoff);
 	}
 
 	function trendPoints(key: string): TrendPoint[] {
@@ -570,6 +568,7 @@
 	}
 
 	function bucketWidth(value: number, max: number): string {
+		if (value <= 0) return '0%';
 		if (max <= 0) return '0%';
 		return `${Math.max(4, Math.round((value / max) * 100))}%`;
 	}
@@ -628,6 +627,7 @@
 						{@const latest = latestPoint(trend.points)}
 						{@const minLine = latest ? referenceLine(trend.points, latest.referenceMin) : null}
 						{@const maxLine = latest ? referenceLine(trend.points, latest.referenceMax) : null}
+						{@const bounds = trendBounds(trend.points)}
 						<div class="dashboard-panel">
 							<div class="flex items-start justify-between gap-3">
 								<div>
@@ -665,7 +665,6 @@
 								{/if}
 								<path d={linePath(trend.points)} class="trend-line" />
 								{#each trend.points as point, index}
-									{@const bounds = trendBounds(trend.points)}
 									<a href={point.href} aria-label={`${trend.label} ${formatDate(point.date)}`}>
 										<circle
 											cx={xFor(index, trend.points.length)}
@@ -711,7 +710,7 @@
 										{reminderScheduleLabel(reminder)} · {reminder.reason}
 									</div>
 								</div>
-								<span class={['reminder-status', `reminder-status-${reminder.status}`]}>
+								<span class={reminderStatusClass(reminder)}>
 									{reminderStatusLabel(reminder)}
 								</span>
 							</div>
