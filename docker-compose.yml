@@ -11,8 +11,8 @@ services:
       - DOCTORINE_ADMIN_PASSWORD=${DOCTORINE_ADMIN_PASSWORD:?DOCTORINE_ADMIN_PASSWORD must be set}
       - DOCTORINE_COOKIE_SECURE=${DOCTORINE_COOKIE_SECURE:-true}
       - DOCTORINE_UPLOAD_DIR=/data/uploads
-    ports:
-      - '8010:8000'
+    # No host port: the frontend reaches the API over the Compose network
+    # (http://backend-go:8000). For host debugging use docker-compose.debug.yml.
     volumes:
       - uploads-data:/data/uploads
     restart: unless-stopped
