@@ -14,12 +14,25 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html', 'lcov'],
-			exclude: ['node_modules/**', '.svelte-kit/**', 'build/**', '**/*.config.*', '**/.*rc.*'],
+			include: ['src/**/*.{ts,svelte}'],
+			exclude: [
+				'node_modules/**',
+				'.svelte-kit/**',
+				'build/**',
+				'**/*.config.*',
+				'**/.*rc.*',
+				'src/**/*.{test,spec}.{js,ts}',
+				'src/**/*.d.ts',
+				'src/**/$types.d.ts'
+			],
+			// Baseline measured against the full src tree (not just imported
+			// files). Raise these as coverage improves; they guard against
+			// regression below the honest current level.
 			thresholds: {
-				statements: 60,
-				branches: 50,
-				functions: 60,
-				lines: 60
+				statements: 8,
+				branches: 17,
+				functions: 10,
+				lines: 11
 			}
 		}
 	}
