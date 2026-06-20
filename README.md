@@ -58,6 +58,9 @@ Uploads are stored under `DOCTORINE_UPLOAD_DIR`; metadata lives in Postgres.
 
 - Auth required for all `/api/*` routes except login/logout
 - Session token stored in an HttpOnly cookie
+- Production compose defaults `DOCTORINE_COOKIE_SECURE=true`; serve behind
+  HTTPS and set an `https://` `ORIGIN` so secure cookies are sent. Local
+  dev compose keeps it `false` for plain HTTP.
 - Browser API calls route through SvelteKit `/api` proxy
 - Uploaded files are not served as static assets
 - Personal app, not compliance-certified medical record software
