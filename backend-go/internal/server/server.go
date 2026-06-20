@@ -17,6 +17,7 @@ import (
 	"github.com/Automaat/doctorine/backend-go/internal/illnesses"
 	"github.com/Automaat/doctorine/backend-go/internal/metrics"
 	"github.com/Automaat/doctorine/backend-go/internal/overview"
+	"github.com/Automaat/doctorine/backend-go/internal/supplements"
 )
 
 const requestTimeout = 60 * time.Second
@@ -102,11 +103,14 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		documentsHandler := documents.NewHandler(documentStore, cfg.UploadDir, logger)
 		illnessHandler := illnesses.NewHandler(illnesses.NewStore(pool), logger)
 		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), logger)
+		supplementHandler := supplements.NewHandler(supplements.NewStore(pool), logger)
 		overviewHandler := overview.NewHandler(pool, documentStore, logger)
 
 		r.Get("/api/overview", overviewHandler.Get)
 		r.Get("/api/illnesses", illnessHandler.List)
 		r.Post("/api/illnesses", illnessHandler.Create)
+		r.Get("/api/supplements", supplementHandler.List)
+		r.Post("/api/supplements", supplementHandler.Create)
 		r.Get("/api/examinations", examinationHandler.List)
 		r.Get("/api/examinations/{id}", examinationHandler.Get)
 		r.Post("/api/examinations", examinationHandler.Create)

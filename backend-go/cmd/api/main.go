@@ -74,6 +74,7 @@ func run() int {
 		logger.Error("DOCTORINE_ADMIN_PASSWORD is required")
 		return 2
 	}
+	seedDemoData := envOr("DOCTORINE_SEED_DEMO_DATA", "false") == "true"
 	if err := os.MkdirAll(cfg.UploadDir, 0o700); err != nil {
 		logger.Error("create upload dir", "err", err)
 		return 2
@@ -85,7 +86,7 @@ func run() int {
 	deps := server.Deps{}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn != "" || os.Getenv("PGHOST") != "" {
-		pool, code := initDB(ctx, dsn, logger, adminUsername, adminPassword)
+		pool, code := initDB(ctx, dsn, logger, adminUsername, adminPassword, seedDemoData)
 		if code != 0 {
 			return code
 		}
@@ -133,6 +134,7 @@ func initDB(
 	logger *slog.Logger,
 	adminUsername string,
 	adminPassword string,
+	seedDemoData bool,
 ) (*pgxpool.Pool, int) {
 	pool, err := db.New(ctx, dsn)
 	if err != nil {
@@ -156,6 +158,14 @@ func initDB(
 		return nil, 2
 	}
 	logger.Info("admin user ready", "username", adminUsername)
+	if seedDemoData {
+		if err := db.SeedDemoData(ctx, pool); err != nil {
+			logger.Error("seed demo data", "err", err)
+			pool.Close()
+			return nil, 2
+		}
+		logger.Info("demo data ready")
+	}
 	return pool, 0
 }
 
