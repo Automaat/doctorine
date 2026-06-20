@@ -62,6 +62,22 @@ Uploads are stored under `DOCTORINE_UPLOAD_DIR`; metadata lives in Postgres.
 - Uploaded files are not served as static assets
 - Personal app, not compliance-certified medical record software
 
+### Required repository security settings
+
+These GitHub settings are managed manually (not in code) and must stay enabled:
+
+- Dependabot alerts — surfaces vulnerable dependencies as security alerts
+- Dependabot security updates — opens automated PRs for vulnerable deps
+
+Renovate handles routine version bumps; Dependabot provides the vulnerability
+signal. Verify with `gh api repos/Automaat/doctorine/dependabot/alerts`
+(returns a JSON list when enabled, `403` when disabled). Re-enable via:
+
+```bash
+gh api -X PUT repos/Automaat/doctorine/vulnerability-alerts
+gh api -X PUT repos/Automaat/doctorine/automated-security-fixes
+```
+
 ## License
 
 Private project
