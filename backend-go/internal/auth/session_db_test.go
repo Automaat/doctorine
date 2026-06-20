@@ -42,7 +42,10 @@ func TestSessionStoreRejectsRevokedAndExpired(t *testing.T) {
 		t.Fatalf("load user: %v", err)
 	}
 
-	_, liveHash, _ := GenerateSessionToken()
+	_, liveHash, err := GenerateSessionToken()
+	if err != nil {
+		t.Fatalf("generate live token: %v", err)
+	}
 	if err := store.CreateSession(ctx, user.ID, liveHash, time.Now().UTC().Add(time.Hour)); err != nil {
 		t.Fatalf("create live session: %v", err)
 	}
@@ -57,7 +60,10 @@ func TestSessionStoreRejectsRevokedAndExpired(t *testing.T) {
 		t.Fatalf("revoked session lookup err = %v, want ErrNotFound", err)
 	}
 
-	_, expiredHash, _ := GenerateSessionToken()
+	_, expiredHash, err := GenerateSessionToken()
+	if err != nil {
+		t.Fatalf("generate expired token: %v", err)
+	}
 	if err := store.CreateSession(ctx, user.ID, expiredHash, time.Now().UTC().Add(-time.Hour)); err != nil {
 		t.Fatalf("create expired session: %v", err)
 	}

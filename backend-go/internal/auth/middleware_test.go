@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,6 +37,18 @@ func TestAuthenticateRejectsRevokedOrExpiredSession(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAuthenticateReturnsServerErrorOnLookupFailure(t *testing.T) {
+	// A transient backend error must not masquerade as an invalid session.
+	h := Authenticate(&fakeSessions{lookupErr: errors.New("db unavailable")})(okHandler(nil))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/auth/me", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: CookieName, Value: "live-token"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
 	}
 }
 

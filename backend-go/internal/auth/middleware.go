@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -31,7 +33,15 @@ func Authenticate(sessions SessionStore) func(http.Handler) http.Handler {
 			}
 			user, err := sessions.SessionUser(r.Context(), HashSessionToken(raw))
 			if err != nil {
-				httputil.WriteDetailError(w, http.StatusUnauthorized, "Not authenticated")
+				// Only a missing/revoked/expired session is an auth failure.
+				// Treat other (e.g. transient DB) errors as 500 so the
+				// frontend keeps the cookie instead of logging the user out.
+				if errors.Is(err, ErrNotFound) {
+					httputil.WriteDetailError(w, http.StatusUnauthorized, "Not authenticated")
+					return
+				}
+				slog.Default().Error("load session", "err", err)
+				httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 				return
 			}
 			ctx := context.WithValue(r.Context(), userKey{}, user)
