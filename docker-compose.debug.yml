@@ -1,0 +1,11 @@
+# Optional override for host debugging of the backend API.
+# The production docker-compose.yml does not publish the backend port; the
+# frontend reaches it over the Compose network. Use this override only when you
+# need to hit the API from the host, and it binds to loopback so the API is not
+# exposed on all interfaces:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up
+services:
+  backend-go:
+    ports:
+      - '127.0.0.1:8010:8000'
