@@ -27,6 +27,16 @@ export interface Illness {
 	updated_at: string;
 }
 
+export interface Supplement {
+	id: number;
+	name: string;
+	value: string;
+	frequency: string;
+	notes: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface Examination {
 	id: number;
 	title: string;
