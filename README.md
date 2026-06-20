@@ -66,6 +66,8 @@ Uploads are stored under `DOCTORINE_UPLOAD_DIR`; metadata lives in Postgres.
 
 These GitHub settings are managed manually (not in code) and must stay enabled:
 
+- Dependency graph — prerequisite; alerts are not generated without it
+  (always on for public repos, enable explicitly for private ones)
 - Dependabot alerts — surfaces vulnerable dependencies as security alerts
 - Dependabot security updates — opens automated PRs for vulnerable deps
 
