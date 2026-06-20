@@ -206,12 +206,7 @@ func (h *Handler) writeMultipartFile(part *multipart.Part) (uploadedFile, int, s
 	if err != nil {
 		return uploadedFile{}, http.StatusInternalServerError, "Internal Server Error", err
 	}
-	written, shaHex, detectedType, err := writeUpload(
-		h.uploadDir,
-		storageName,
-		part,
-		part.Header.Get("content-type"),
-	)
+	written, shaHex, detectedType, err := writeUpload(h.uploadDir, storageName, part, filename)
 	if err != nil {
 		_ = removeUpload(h.uploadDir, storageName)
 		status, detail := uploadReadResponse(err)
@@ -250,6 +245,12 @@ func uploadReadResponse(err error) (int, string) {
 	var maxBytesErr *http.MaxBytesError
 	if errors.As(err, &maxBytesErr) {
 		return http.StatusBadRequest, "Upload must be multipart and under 50 MB"
+	}
+	if errors.Is(err, errEmptyUpload) {
+		return http.StatusUnprocessableEntity, "Uploaded file is empty"
+	}
+	if errors.Is(err, errUnsupportedType) {
+		return http.StatusUnprocessableEntity, "Unsupported document type. Allowed types: " + allowedDocumentTypesLabel
 	}
 	return 0, ""
 }
@@ -313,11 +314,15 @@ func removeUpload(uploadDir string, storageName string) error {
 	return root.Remove(storageName)
 }
 
+// writeUpload streams the part to storage. The stored content type is always
+// sniffed from the first 512 bytes; the multipart Content-Type is never
+// trusted. The extension and sniffed type must be on the allowlist and agree,
+// otherwise the upload is rejected before the rest of the body is written.
 func writeUpload(
 	uploadDir string,
 	storageName string,
 	src io.Reader,
-	declaredType string,
+	originalName string,
 ) (int64, string, string, error) {
 	root, err := os.OpenRoot(uploadDir)
 	if err != nil {
@@ -337,17 +342,17 @@ func writeUpload(
 		return 0, "", "", err
 	}
 	head = head[:read]
-	contentType := declaredType
-	if contentType == "" || contentType == "application/octet-stream" {
-		contentType = http.DetectContentType(head)
+	if len(head) == 0 {
+		return 0, "", "", errEmptyUpload
+	}
+	contentType := http.DetectContentType(head)
+	if err := validateDocumentType(originalName, contentType); err != nil {
+		return 0, "", "", err
 	}
 	hasher := sha256.New()
 	written, err := io.Copy(io.MultiWriter(out, hasher), io.MultiReader(bytes.NewReader(head), src))
 	if err != nil {
 		return 0, "", "", err
-	}
-	if written == 0 {
-		return 0, "", "", errors.New("empty upload")
 	}
 	return written, hex.EncodeToString(hasher.Sum(nil)), contentType, nil
 }
