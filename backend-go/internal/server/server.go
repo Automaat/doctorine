@@ -25,7 +25,6 @@ const requestTimeout = 60 * time.Second
 type Config struct {
 	Addr         string
 	CORSOrigins  string
-	JWTSecret    string
 	CookieSecure bool
 	UploadDir    string
 }
@@ -90,14 +89,14 @@ func requestObserver(logger *slog.Logger) func(http.Handler) http.Handler {
 }
 
 func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.Logger) {
-	tokens := auth.NewTokenService(cfg.JWTSecret)
-	authHandler := auth.NewHandler(auth.NewStore(pool), tokens, cfg.CookieSecure, logger)
+	store := auth.NewStore(pool)
+	authHandler := auth.NewHandler(store, cfg.CookieSecure, logger)
 
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.Authenticate(tokens))
+		r.Use(auth.Authenticate(store))
 		r.Get("/api/auth/me", authHandler.Me)
 
 		documentStore := documents.NewStore(pool)
