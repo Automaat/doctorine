@@ -30,6 +30,7 @@ services:
       - DOCTORINE_ADMIN_USERNAME=${DOCTORINE_ADMIN_USERNAME:-admin}
       - DOCTORINE_ADMIN_PASSWORD=${DOCTORINE_ADMIN_PASSWORD:-admin}
       - DOCTORINE_COOKIE_SECURE=false
+      - DOCTORINE_SEED_DEMO_DATA=${DOCTORINE_SEED_DEMO_DATA:-true}
       - DOCTORINE_UPLOAD_DIR=/data/uploads
     volumes:
       - uploads-data:/data/uploads

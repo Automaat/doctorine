@@ -34,10 +34,15 @@ Dev login defaults:
 - Username: `admin`
 - Password: `admin`
 
+`mise run dev` enables `DOCTORINE_SEED_DEMO_DATA=true` by default, which inserts
+synthetic demo illnesses, lab results, and supplements into an empty or existing
+development database without duplicating rows.
+
 ## Data Model
 
 - Illnesses: diagnosis/status notes
 - Examinations: result records and review status
+- Supplements: current supplements, value, and frequency
 - Documents: uploaded PDFs/scans/images, stored outside the web root
 - Overview: counts and recent documents
 
