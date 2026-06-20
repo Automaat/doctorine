@@ -1,5 +1,6 @@
 import { redirect, type Handle, type HandleFetch } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
+import { env as privateEnv } from '$env/dynamic/private';
 
 interface SessionUser {
 	username: string;
@@ -7,44 +8,61 @@ interface SessionUser {
 	isAdmin: boolean;
 }
 
-function decodeUser(token: string): SessionUser | null {
+function backendBase(): string {
+	return privateEnv.API_PROXY_TARGET || env.PUBLIC_API_URL || 'http://localhost:8000';
+}
+
+type AuthResult = { status: 'ok'; user: SessionUser } | { status: 'invalid' } | { status: 'error' };
+
+// resolveUser verifies the opaque session token against the backend instead of
+// trusting client-decoded claims. It distinguishes a definitively invalid
+// session (revoked/expired -> 401) from a transient backend failure so a blip
+// does not discard an otherwise valid cookie.
+async function resolveUser(token: string): Promise<AuthResult> {
+	let response: Response;
 	try {
-		const payload = token.split('.')[1];
-		if (!payload) return null;
-		const pad = payload.length % 4 === 0 ? '' : '='.repeat(4 - (payload.length % 4));
-		const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/') + pad);
-		const claims = JSON.parse(json) as {
-			username?: unknown;
-			name?: unknown;
-			is_admin?: unknown;
-			exp?: unknown;
-		};
-		if (typeof claims.exp !== 'number' || claims.exp * 1000 < Date.now()) return null;
-		if (typeof claims.username !== 'string' || claims.username === '') return null;
-		if (typeof claims.is_admin !== 'boolean') return null;
-		return {
-			username: claims.username,
-			name: typeof claims.name === 'string' ? claims.name : '',
-			isAdmin: claims.is_admin
-		};
+		response = await fetch(`${backendBase()}/api/auth/me`, {
+			headers: { authorization: `Bearer ${token}` }
+		});
 	} catch {
-		return null;
+		return { status: 'error' };
+	}
+	if (response.status === 401) return { status: 'invalid' };
+	if (!response.ok) return { status: 'error' };
+	try {
+		const data = (await response.json()) as {
+			username?: unknown;
+			display_name?: unknown;
+			is_admin?: unknown;
+		};
+		if (typeof data.username !== 'string' || data.username === '') return { status: 'invalid' };
+		if (typeof data.is_admin !== 'boolean') return { status: 'invalid' };
+		const name =
+			typeof data.display_name === 'string' && data.display_name !== ''
+				? data.display_name
+				: data.username;
+		return { status: 'ok', user: { username: data.username, name, isAdmin: data.is_admin } };
+	} catch {
+		return { status: 'error' };
 	}
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+	const isAsset = pathname.startsWith('/_app/') || /\.\w+$/.test(pathname);
 	const token = event.cookies.get('doctorine_token');
-	const user = token ? decodeUser(token) : null;
+	const auth = token && !isAsset ? await resolveUser(token) : null;
+	const user = auth?.status === 'ok' ? auth.user : null;
 	event.locals.user = user;
 
 	if (user) return resolve(event);
 
-	if (token) {
+	// Only discard the cookie when the backend says the session is invalid;
+	// keep it on a transient backend error so users are not logged out by a blip.
+	if (token && !isAsset && auth?.status === 'invalid') {
 		event.cookies.delete('doctorine_token', { path: '/' });
 	}
 
-	const isAsset = pathname.startsWith('/_app/') || /\.\w+$/.test(pathname);
 	const isLogin = pathname === '/login';
 	const isPublicApi = pathname === '/api/auth/login' || pathname === '/api/auth/logout';
 	if (isAsset || isLogin || isPublicApi) return resolve(event);

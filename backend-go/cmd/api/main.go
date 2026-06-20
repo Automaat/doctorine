@@ -65,13 +65,8 @@ func run() int {
 	cfg := server.Config{
 		Addr:         envOr("DOCTORINE_ADDR", ":8000"),
 		CORSOrigins:  envOr("CORS_ORIGINS", "http://localhost:3001"),
-		JWTSecret:    os.Getenv("DOCTORINE_JWT_SECRET"),
 		CookieSecure: envOr("DOCTORINE_COOKIE_SECURE", "false") == "true",
 		UploadDir:    envOr("DOCTORINE_UPLOAD_DIR", "./data/uploads"),
-	}
-	if cfg.JWTSecret == "" {
-		logger.Error("DOCTORINE_JWT_SECRET is required")
-		return 2
 	}
 	adminUsername := envOr("DOCTORINE_ADMIN_USERNAME", "admin")
 	adminPassword := os.Getenv("DOCTORINE_ADMIN_PASSWORD")

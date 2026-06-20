@@ -10,35 +10,44 @@ import (
 
 const CookieName = "doctorine_token"
 
-type claimsKey struct{}
+type userKey struct{}
 
-func ClaimsFrom(ctx context.Context) (*Claims, bool) {
-	claims, ok := ctx.Value(claimsKey{}).(*Claims)
-	return claims, ok
+// UserFrom returns the authenticated user stored by Authenticate.
+func UserFrom(ctx context.Context) (*User, bool) {
+	user, ok := ctx.Value(userKey{}).(*User)
+	return user, ok
 }
 
-func Authenticate(tokens *TokenService) func(http.Handler) http.Handler {
+// Authenticate resolves the presented opaque token to a live server session and
+// stores the owning user in the request context. Missing, revoked, or expired
+// sessions are rejected with 401.
+func Authenticate(sessions SessionStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			raw := bearerToken(r.Header.Get("authorization"))
-			if raw == "" {
-				if cookie, err := r.Cookie(CookieName); err == nil {
-					raw = cookie.Value
-				}
-			}
+			raw := tokenFromRequest(r)
 			if raw == "" {
 				httputil.WriteDetailError(w, http.StatusUnauthorized, "Not authenticated")
 				return
 			}
-			claims, err := tokens.Parse(raw)
+			user, err := sessions.SessionUser(r.Context(), HashSessionToken(raw))
 			if err != nil {
 				httputil.WriteDetailError(w, http.StatusUnauthorized, "Not authenticated")
 				return
 			}
-			ctx := context.WithValue(r.Context(), claimsKey{}, claims)
+			ctx := context.WithValue(r.Context(), userKey{}, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func tokenFromRequest(r *http.Request) string {
+	if raw := bearerToken(r.Header.Get("authorization")); raw != "" {
+		return raw
+	}
+	if cookie, err := r.Cookie(CookieName); err == nil {
+		return cookie.Value
+	}
+	return ""
 }
 
 func bearerToken(header string) string {

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -16,17 +15,17 @@ const (
 )
 
 type Handler struct {
-	store        *Store
-	tokens       *TokenService
+	users        UserStore
+	sessions     SessionStore
 	logger       *slog.Logger
 	cookieSecure bool
 }
 
-func NewHandler(store *Store, tokens *TokenService, cookieSecure bool, logger *slog.Logger) *Handler {
+func NewHandler(store *Store, cookieSecure bool, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{store: store, tokens: tokens, cookieSecure: cookieSecure, logger: logger}
+	return &Handler{users: store, sessions: store, cookieSecure: cookieSecure, logger: logger}
 }
 
 type loginRequest struct {
@@ -64,7 +63,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteDetailError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	user, err := h.store.GetByUsername(r.Context(), strings.TrimSpace(req.Username))
+	user, err := h.users.GetByUsername(r.Context(), strings.TrimSpace(req.Username))
 	if err != nil || user == nil || !CheckPassword(user.PasswordHash, req.Password) {
 		httputil.WriteDetailError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
@@ -73,9 +72,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if req.RememberMe {
 		ttl = rememberTTL
 	}
-	token, err := h.tokens.Sign(user, ttl)
+	token, tokenHash, err := GenerateSessionToken()
 	if err != nil {
-		h.logger.Error("sign token", "err", err)
+		h.logger.Error("generate session token", "err", err)
+		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	expiresAt := time.Now().UTC().Add(ttl)
+	if err := h.sessions.CreateSession(r.Context(), user.ID, tokenHash, expiresAt); err != nil {
+		h.logger.Error("create session", "err", err)
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
@@ -83,7 +88,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, loginResponse{Token: token, User: toUserResponse(user)})
 }
 
-func (h *Handler) Logout(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	if token := tokenFromRequest(r); token != "" {
+		if err := h.sessions.RevokeSession(r.Context(), HashSessionToken(token)); err != nil {
+			h.logger.Warn("revoke session", "err", err)
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    "",
@@ -97,19 +107,9 @@ func (h *Handler) Logout(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
-	claims, ok := ClaimsFrom(r.Context())
+	user, ok := UserFrom(r.Context())
 	if !ok {
 		httputil.WriteDetailError(w, http.StatusUnauthorized, "Not authenticated")
-		return
-	}
-	user, err := h.store.GetByUsername(r.Context(), claims.Username)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			httputil.WriteDetailError(w, http.StatusUnauthorized, "Not authenticated")
-			return
-		}
-		h.logger.Error("get user", "err", err)
-		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, toUserResponse(user))
