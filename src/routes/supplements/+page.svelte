@@ -7,8 +7,13 @@
 	let error = $state('');
 	let saving = $state(false);
 
-	function value(form: FormData, key: string): string | null {
+	function value(form: FormData, key: string): string {
 		const raw = String(form.get(key) ?? '').trim();
+		return raw;
+	}
+
+	function optionalValue(form: FormData, key: string): string | null {
+		const raw = value(form, key);
 		return raw === '' ? null : raw;
 	}
 
@@ -22,21 +27,26 @@
 			name: value(form, 'name'),
 			value: value(form, 'value'),
 			frequency: value(form, 'frequency'),
-			notes: value(form, 'notes')
+			notes: optionalValue(form, 'notes')
 		};
-		const response = await fetch('/api/supplements', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(payload)
-		});
-		saving = false;
-		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-			error = body?.detail ?? 'Save failed';
-			return;
+		try {
+			const response = await fetch('/api/supplements', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			if (!response.ok) {
+				const body = (await response.json().catch(() => null)) as { detail?: string } | null;
+				error = body?.detail ?? 'Save failed';
+				return;
+			}
+			formEl.reset();
+			await invalidateAll();
+		} catch {
+			error = 'Save failed';
+		} finally {
+			saving = false;
 		}
-		formEl.reset();
-		await invalidateAll();
 	}
 </script>
 
