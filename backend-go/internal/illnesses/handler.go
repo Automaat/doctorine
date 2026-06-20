@@ -1,6 +1,7 @@
 package illnesses
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,8 +10,15 @@ import (
 	"github.com/Automaat/doctorine/backend-go/internal/httputil"
 )
 
+// repository is the subset of *Store the handler needs, so handler behavior can
+// be tested without a database.
+type repository interface {
+	List(ctx context.Context) ([]Illness, error)
+	Create(ctx context.Context, params CreateParams) (Illness, error)
+}
+
 type Handler struct {
-	store  *Store
+	store  repository
 	logger *slog.Logger
 }
 

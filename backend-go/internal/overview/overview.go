@@ -19,17 +19,55 @@ type Response struct {
 	RecentDocuments  []documents.Document `json:"recent_documents"`
 }
 
-type Handler struct {
-	pool      *pgxpool.Pool
-	documents *documents.Store
-	logger    *slog.Logger
+// Counts holds the dashboard summary totals.
+type Counts struct {
+	Documents    int
+	Illnesses    int
+	Examinations int
+	Flagged      int
 }
 
-func NewHandler(pool *pgxpool.Pool, documents *documents.Store, logger *slog.Logger) *Handler {
+// source supplies the data the handler renders, so handler behavior can be
+// tested without a database.
+type source interface {
+	Counts(ctx context.Context) (Counts, error)
+	RecentDocuments(ctx context.Context, limit int) ([]documents.Document, error)
+}
+
+type pgxSource struct {
+	pool      *pgxpool.Pool
+	documents *documents.Store
+}
+
+func (s pgxSource) Counts(ctx context.Context) (Counts, error) {
+	var counts Counts
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			(SELECT count(*) FROM documents),
+			(SELECT count(*) FROM illnesses WHERE status <> 'resolved'),
+			(SELECT count(*) FROM examinations),
+			(SELECT count(*) FROM examination_results WHERE flag IS NOT NULL)
+	`).Scan(&counts.Documents, &counts.Illnesses, &counts.Examinations, &counts.Flagged)
+	if err != nil {
+		return Counts{}, err
+	}
+	return counts, nil
+}
+
+func (s pgxSource) RecentDocuments(ctx context.Context, limit int) ([]documents.Document, error) {
+	return s.documents.Recent(ctx, limit)
+}
+
+type Handler struct {
+	src    source
+	logger *slog.Logger
+}
+
+func NewHandler(pool *pgxpool.Pool, docs *documents.Store, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{pool: pool, documents: documents, logger: logger}
+	return &Handler{src: pgxSource{pool: pool, documents: docs}, logger: logger}
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
@@ -43,26 +81,19 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) load(ctx context.Context) (Response, error) {
-	var response Response
-	err := h.pool.QueryRow(ctx, `
-		SELECT
-			(SELECT count(*) FROM documents),
-			(SELECT count(*) FROM illnesses WHERE status <> 'resolved'),
-			(SELECT count(*) FROM examinations),
-			(SELECT count(*) FROM examination_results WHERE flag IS NOT NULL)
-	`).Scan(
-		&response.DocumentCount,
-		&response.IllnessCount,
-		&response.ExaminationCount,
-		&response.FlaggedResults,
-	)
+	counts, err := h.src.Counts(ctx)
 	if err != nil {
 		return Response{}, err
 	}
-	recent, err := h.documents.Recent(ctx, 5)
+	recent, err := h.src.RecentDocuments(ctx, 5)
 	if err != nil {
 		return Response{}, err
 	}
-	response.RecentDocuments = recent
-	return response, nil
+	return Response{
+		DocumentCount:    counts.Documents,
+		IllnessCount:     counts.Illnesses,
+		ExaminationCount: counts.Examinations,
+		FlaggedResults:   counts.Flagged,
+		RecentDocuments:  recent,
+	}, nil
 }
