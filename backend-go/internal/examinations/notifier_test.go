@@ -1,11 +1,14 @@
 package examinations
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -78,26 +81,46 @@ func TestHTTPNotifierPostsEvent(t *testing.T) {
 	}
 }
 
-func TestHandlerCreateNotifies(t *testing.T) {
-	spy := &spyNotifier{}
-	h := &Handler{notifier: spy, logger: slog.Default()}
-	// Exercise the glue directly: the handler builds the event from the created
-	// examination and hands it to the notifier.
-	item := Examination{ID: 9, ExamDate: "2026-06-02", Results: []Result{{TestKey: "glukoza", Flag: new("H")}}}
-	if h.notifier != nil {
-		h.notifier.ExaminationCreated(buildExaminationCreatedEvent(item))
+func TestHTTPNotifierBoundsConcurrencyAndDrains(t *testing.T) {
+	release := make(chan struct{})
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		<-release // block until the test lets deliveries finish
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	notifier := NewHTTPNotifier(srv.URL, slog.Default())
+	// Fire more than the concurrency cap; the excess is dropped, not queued.
+	for i := range maxConcurrentWebhooks + 5 {
+		notifier.ExaminationCreated(ExaminationCreatedEvent{ExaminationID: i})
 	}
-	if spy.event.ExaminationID != 9 || len(spy.event.FlaggedTestKeys) != 1 || spy.event.FlaggedTestKeys[0] != "glukoza" {
-		t.Fatalf("notifier received %+v", spy.event)
+
+	// Shutdown must wait for in-flight deliveries: with the server still
+	// blocking, the drain only returns once its context is canceled.
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	notifier.Shutdown(ctx)
+	if time.Since(start) < 100*time.Millisecond {
+		t.Fatal("Shutdown returned before draining in-flight deliveries")
+	}
+	close(release)
+	if got := hits.Load(); got > maxConcurrentWebhooks {
+		t.Fatalf("delivered %d concurrently, want <= %d", got, maxConcurrentWebhooks)
 	}
 }
 
 type spyNotifier struct {
+	mu    sync.Mutex
 	event ExaminationCreatedEvent
 	calls int
 }
 
 func (s *spyNotifier) ExaminationCreated(event ExaminationCreatedEvent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.event = event
 	s.calls++
 }

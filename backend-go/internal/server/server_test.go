@@ -8,7 +8,7 @@ import (
 )
 
 func TestHealthWithoutDB(t *testing.T) {
-	handler := New(Config{}, nil, Deps{})
+	handler, _ := New(Config{}, nil, Deps{})
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", http.NoBody)
 	rec := httptest.NewRecorder()
 

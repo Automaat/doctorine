@@ -82,6 +82,9 @@ linters:
       excludes:
         - G304
         - G124
+        # Outbound webhook URL is operator-configured (DOCTORINE_WEBHOOK_URL),
+        # never user input, so SSRF taint analysis is a false positive here.
+        - G704
 
     govet:
       enable-all: true

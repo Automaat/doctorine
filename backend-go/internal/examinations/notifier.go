@@ -6,10 +6,19 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"sync"
 	"time"
 )
 
-const webhookTimeout = 10 * time.Second
+const (
+	// webhookTimeout bounds a single delivery. Kept below the server's shutdown
+	// budget so an in-flight delivery can drain before the process exits.
+	webhookTimeout = 8 * time.Second
+	// maxConcurrentWebhooks caps in-flight deliveries so a create flood against a
+	// slow endpoint cannot spawn unbounded goroutines.
+	maxConcurrentWebhooks = 16
+)
 
 // ExaminationCreatedEvent is the payload delivered to the configured webhook
 // after a new examination is saved, letting an external coaching loop react to
@@ -33,23 +42,58 @@ type HTTPNotifier struct {
 	url    string
 	client *http.Client
 	logger *slog.Logger
+	sem    chan struct{}
+	wg     sync.WaitGroup
 }
 
-// NewHTTPNotifier returns a notifier that POSTs to url. url must be non-empty;
-// callers skip wiring a notifier when no webhook is configured.
-func NewHTTPNotifier(url string, logger *slog.Logger) *HTTPNotifier {
+// NewHTTPNotifier returns a notifier that POSTs to webhookURL. webhookURL must be
+// non-empty; callers skip wiring a notifier when no webhook is configured. A
+// malformed URL is logged at startup but still constructed (deliveries then fail
+// per-request, logged at Warn).
+func NewHTTPNotifier(webhookURL string, logger *slog.Logger) *HTTPNotifier {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if parsed, err := url.ParseRequestURI(webhookURL); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		logger.Error("DOCTORINE_WEBHOOK_URL must be an http(s) URL", "url", webhookURL, "err", err)
+	}
 	return &HTTPNotifier{
-		url:    url,
+		url:    webhookURL,
 		client: &http.Client{Timeout: webhookTimeout},
 		logger: logger,
+		sem:    make(chan struct{}, maxConcurrentWebhooks),
 	}
 }
 
 func (n *HTTPNotifier) ExaminationCreated(event ExaminationCreatedEvent) {
-	go n.deliver(event)
+	// Drop (and log) rather than block the caller or grow goroutines without
+	// bound when deliveries pile up against a slow endpoint.
+	select {
+	case n.sem <- struct{}{}:
+	default:
+		n.logger.Warn("webhook concurrency limit reached, dropping delivery",
+			"examination_id", event.ExaminationID)
+		return
+	}
+	n.wg.Go(func() {
+		defer func() { <-n.sem }()
+		n.deliver(event)
+	})
+}
+
+// Shutdown blocks until in-flight deliveries finish or ctx is done, so a
+// graceful server stop does not silently drop a just-fired webhook.
+func (n *HTTPNotifier) Shutdown(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		n.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		n.logger.Warn("shutdown timed out with webhook deliveries still in flight")
+	}
 }
 
 func (n *HTTPNotifier) deliver(event ExaminationCreatedEvent) {

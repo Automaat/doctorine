@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -36,7 +37,10 @@ type Deps struct {
 	Pool *pgxpool.Pool
 }
 
-func New(cfg Config, logger *slog.Logger, deps Deps) http.Handler {
+// New builds the HTTP handler and a drain func that blocks until background work
+// (e.g. outbound webhooks) finishes or its context is done. Callers invoke drain
+// after the HTTP server has shut down.
+func New(cfg Config, logger *slog.Logger, deps Deps) (http.Handler, func(context.Context)) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -59,10 +63,11 @@ func New(cfg Config, logger *slog.Logger, deps Deps) http.Handler {
 	r.Get("/health", healthHandler(logger, healthPool))
 	r.Handle("/metrics", metrics.Handler())
 
+	drain := func(context.Context) {}
 	if deps.Pool != nil {
-		registerRoutes(r, cfg, deps.Pool, logger)
+		drain = registerRoutes(r, cfg, deps.Pool, logger)
 	}
-	return r
+	return r, drain
 }
 
 func requestObserver(logger *slog.Logger) func(http.Handler) http.Handler {
@@ -91,12 +96,20 @@ func requestObserver(logger *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.Logger) {
+func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.Logger) func(context.Context) {
 	store := auth.NewStore(pool)
 	authHandler := auth.NewHandler(store, cfg.CookieSecure, logger)
 
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
+
+	drain := func(context.Context) {}
+	var examinationNotifier examinations.Notifier
+	if cfg.WebhookURL != "" {
+		httpNotifier := examinations.NewHTTPNotifier(cfg.WebhookURL, logger)
+		examinationNotifier = httpNotifier
+		drain = httpNotifier.Shutdown
+	}
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Authenticate(store))
@@ -108,10 +121,6 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		documentStore := documents.NewStore(pool)
 		documentsHandler := documents.NewHandler(documentStore, cfg.UploadDir, logger)
 		illnessHandler := illnesses.NewHandler(illnesses.NewStore(pool), logger)
-		var examinationNotifier examinations.Notifier
-		if cfg.WebhookURL != "" {
-			examinationNotifier = examinations.NewHTTPNotifier(cfg.WebhookURL, logger)
-		}
 		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), examinationNotifier, logger)
 		supplementHandler := supplements.NewHandler(supplements.NewStore(pool), logger)
 		weightHandler := weights.NewHandler(weights.NewStore(pool), logger)
@@ -137,6 +146,8 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		r.Get("/api/documents/{id}/download", documentsHandler.Download)
 		r.Delete("/api/documents/{id}", documentsHandler.Delete)
 	})
+
+	return drain
 }
 
 func splitOrigins(raw string) []string {
