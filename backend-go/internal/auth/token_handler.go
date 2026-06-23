@@ -100,7 +100,9 @@ func (h *Handler) CreateToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ListTokens returns the current user's active (non-revoked) tokens.
+// ListTokens returns the current user's non-revoked tokens. Expired (but not
+// revoked) tokens are still listed so the owner can see and remove them; the UI
+// flags them as expired.
 func (h *Handler) ListTokens(w http.ResponseWriter, r *http.Request) {
 	user, ok := UserFrom(r.Context())
 	if !ok {

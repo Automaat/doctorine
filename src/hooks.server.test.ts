@@ -37,4 +37,12 @@ describe('handle api auth gate', () => {
 		expect(resolve).not.toHaveBeenCalled();
 		expect(res.status).toBe(401);
 	});
+
+	it('rejects a non-bearer authorization header with 401', async () => {
+		const event = apiEvent({ authHeader: 'Basic Zm9vOmJhcg==' });
+		const resolve = vi.fn();
+		const res = await handle({ event, resolve } as unknown as Parameters<typeof handle>[0]);
+		expect(resolve).not.toHaveBeenCalled();
+		expect(res.status).toBe(401);
+	});
 });
