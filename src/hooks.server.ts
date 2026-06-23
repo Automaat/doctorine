@@ -68,6 +68,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (isAsset || isLogin || isPublicApi) return resolve(event);
 
 	if (pathname.startsWith('/api/')) {
+		// A service may authenticate with a personal access token via the
+		// Authorization header instead of the browser session cookie. Let those
+		// requests through to the proxy; the backend is the authority on whether
+		// the bearer token is valid.
+		if (event.request.headers.has('authorization')) return resolve(event);
 		return new Response(JSON.stringify({ detail: 'Not authenticated' }), {
 			status: 401,
 			headers: { 'content-type': 'application/json' }

@@ -12,9 +12,15 @@ const proxy: RequestHandler = async ({ request, params, cookies, url, fetch }) =
 		const value = request.headers.get(name);
 		if (value) headers.set(name, value);
 	}
+	// Browser sessions authenticate via the cookie; service integrations send a
+	// personal access token in the Authorization header. The cookie wins when
+	// both are present.
 	const token = cookies.get('doctorine_token');
+	const inboundAuth = request.headers.get('authorization');
 	if (token) {
 		headers.set('authorization', `Bearer ${token}`);
+	} else if (inboundAuth) {
+		headers.set('authorization', inboundAuth);
 	}
 
 	const init: RequestInit = { method: request.method, headers };

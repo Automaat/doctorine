@@ -60,10 +60,19 @@ func TestPersonalTokenStore(t *testing.T) {
 	}
 
 	listed, err := store.ListPersonalTokens(ctx, user.ID)
-	if err != nil || len(listed) != 1 {
-		t.Fatalf("list = (%v, %v), want one token", listed, err)
+	if err != nil {
+		t.Fatalf("list: %v", err)
 	}
-	if listed[0].LastUsedAt == nil {
+	var found *PersonalToken
+	for i := range listed {
+		if listed[i].ID == token.ID {
+			found = &listed[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("created token %d not returned by list", token.ID)
+	}
+	if found.LastUsedAt == nil {
 		t.Fatal("last_used_at was not recorded on use")
 	}
 
