@@ -6,6 +6,7 @@ type LatestResult struct {
 	TestKey      string   `json:"test_key"`
 	Name         string   `json:"name"`
 	ExamDate     string   `json:"exam_date"`
+	ValueText    *string  `json:"value_text"`
 	ValueNumeric *float64 `json:"value_numeric"`
 	ValuePrefix  *string  `json:"value_prefix"`
 	Unit         *string  `json:"unit"`
