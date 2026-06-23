@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"strings"
 	"time"
 )
 
@@ -24,12 +25,19 @@ type UserStore interface {
 // GenerateSessionToken returns a new opaque session token and its SHA-256 hash.
 // Only the hash is ever stored, so a database leak cannot reveal usable tokens.
 func GenerateSessionToken() (string, string, error) {
-	var raw [32]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", "", err
+	for {
+		var raw [32]byte
+		if _, err := rand.Read(raw[:]); err != nil {
+			return "", "", err
+		}
+		token := base64.RawURLEncoding.EncodeToString(raw[:])
+		// Never emit a session token that collides with the personal access
+		// token prefix, so the auth middleware can route by prefix unambiguously.
+		if strings.HasPrefix(token, PersonalTokenPrefix) {
+			continue
+		}
+		return token, HashSessionToken(token), nil
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw[:])
-	return token, HashSessionToken(token), nil
 }
 
 // HashSessionToken hashes a presented token so it can be matched against the

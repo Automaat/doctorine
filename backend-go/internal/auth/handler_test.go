@@ -13,12 +13,16 @@ import (
 // fakeSessions records session operations so tests can assert on them without a
 // database.
 type fakeSessions struct {
-	user        *User
-	lookupErr   error
-	createErr   error
-	createdHash string
-	createdUser int
-	revoked     []string
+	user          *User
+	lookupErr     error
+	createErr     error
+	createdHash   string
+	createdUser   int
+	revoked       []string
+	patUser       *User
+	patScope      string
+	patLookupErr  error
+	patHashLooked string
 }
 
 func (f *fakeSessions) CreateSession(_ context.Context, userID int, tokenHash string, _ time.Time) error {
@@ -40,6 +44,14 @@ func (f *fakeSessions) SessionUser(_ context.Context, _ string) (*User, error) {
 func (f *fakeSessions) RevokeSession(_ context.Context, tokenHash string) error {
 	f.revoked = append(f.revoked, tokenHash)
 	return nil
+}
+
+func (f *fakeSessions) PersonalTokenUser(_ context.Context, tokenHash string) (*User, string, error) {
+	f.patHashLooked = tokenHash
+	if f.patLookupErr != nil {
+		return nil, "", f.patLookupErr
+	}
+	return f.patUser, f.patScope, nil
 }
 
 type fakeUsers struct {

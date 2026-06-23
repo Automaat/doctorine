@@ -7,6 +7,7 @@
 		HeartPulse,
 		LogOut,
 		Pill,
+		Settings,
 		Stethoscope,
 		User,
 		Weight
@@ -21,7 +22,8 @@
 		{ href: '/examinations', label: 'Exams', icon: Stethoscope },
 		{ href: '/supplements', label: 'Supplements', icon: Pill },
 		{ href: '/weights', label: 'Weight', icon: Weight },
-		{ href: '/illnesses', label: 'Illnesses', icon: HeartPulse }
+		{ href: '/illnesses', label: 'Illnesses', icon: HeartPulse },
+		{ href: '/settings', label: 'Settings', icon: Settings }
 	];
 
 	const isLoginPage = $derived($page.url.pathname === '/login');
@@ -93,7 +95,7 @@
 			</main>
 
 			<nav
-				class="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-6 border-t border-surface-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+				class="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-7 border-t border-surface-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
 				aria-label="Mobile navigation"
 			>
 				{#each nav as item}

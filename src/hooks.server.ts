@@ -68,6 +68,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (isAsset || isLogin || isPublicApi) return resolve(event);
 
 	if (pathname.startsWith('/api/')) {
+		// A service may authenticate with a personal access token via a Bearer
+		// Authorization header instead of the browser session cookie. Let those
+		// requests through to the proxy; the backend is the authority on whether
+		// the bearer token is valid. Only Bearer credentials pass — the backend
+		// ignores other schemes, so they should not widen the proxy surface.
+		const authHeader = event.request.headers.get('authorization') ?? '';
+		if (/^bearer\s+\S/i.test(authHeader)) return resolve(event);
 		return new Response(JSON.stringify({ detail: 'Not authenticated' }), {
 			status: 401,
 			headers: { 'content-type': 'application/json' }

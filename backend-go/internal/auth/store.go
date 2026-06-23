@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -80,6 +81,125 @@ func (s *Store) RevokeSession(ctx context.Context, tokenHash string) error {
 		WHERE token_hash = $1 AND revoked_at IS NULL
 	`, tokenHash)
 	return err
+}
+
+func (s *Store) CreatePersonalToken(
+	ctx context.Context,
+	userID int,
+	tokenHash string,
+	name string,
+	scope string,
+	expiresAt *time.Time,
+) (PersonalToken, error) {
+	row := s.pool.QueryRow(ctx, `
+		INSERT INTO personal_access_tokens (user_id, token_hash, name, scope, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, user_id, name, scope, expires_at, last_used_at, revoked_at, created_at
+	`, userID, tokenHash, name, scope, expiresAt)
+	return scanPersonalToken(row)
+}
+
+func (s *Store) ListPersonalTokens(ctx context.Context, userID int) ([]PersonalToken, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, user_id, name, scope, expires_at, last_used_at, revoked_at, created_at
+		FROM personal_access_tokens
+		WHERE user_id = $1 AND revoked_at IS NULL
+		ORDER BY created_at DESC, id DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tokens := []PersonalToken{}
+	for rows.Next() {
+		token, err := scanPersonalToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens, rows.Err()
+}
+
+// RevokePersonalToken revokes a token the user owns. It returns ErrNotFound when
+// no matching live token exists, so a caller cannot revoke another user's token.
+func (s *Store) RevokePersonalToken(ctx context.Context, userID int, id int) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE personal_access_tokens
+		SET revoked_at = (now() at time zone 'utc')
+		WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+	`, id, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// PersonalTokenUser validates a token hash and, in the same statement, records
+// last_used_at. Revoked or expired tokens yield ErrNotFound.
+func (s *Store) PersonalTokenUser(ctx context.Context, tokenHash string) (*User, string, error) {
+	var user User
+	var scope string
+	err := s.pool.QueryRow(ctx, `
+		UPDATE personal_access_tokens t
+		SET last_used_at = (now() at time zone 'utc')
+		FROM users u
+		WHERE t.token_hash = $1
+			AND t.user_id = u.id
+			AND t.revoked_at IS NULL
+			AND (t.expires_at IS NULL OR t.expires_at > (now() at time zone 'utc'))
+		RETURNING t.scope, u.id, u.username, u.password_hash, u.is_admin, u.display_name, u.created_at
+	`, tokenHash).Scan(
+		&scope,
+		&user.ID,
+		&user.Username,
+		&user.PasswordHash,
+		&user.IsAdmin,
+		&user.DisplayName,
+		&user.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrNotFound
+		}
+		return nil, "", err
+	}
+	return &user, scope, nil
+}
+
+func scanPersonalToken(row pgx.Row) (PersonalToken, error) {
+	var token PersonalToken
+	var expiresAt pgtype.Timestamp
+	var lastUsedAt pgtype.Timestamp
+	var revokedAt pgtype.Timestamp
+	if err := row.Scan(
+		&token.ID,
+		&token.UserID,
+		&token.Name,
+		&token.Scope,
+		&expiresAt,
+		&lastUsedAt,
+		&revokedAt,
+		&token.CreatedAt,
+	); err != nil {
+		return PersonalToken{}, err
+	}
+	token.ExpiresAt = timestampPtr(expiresAt)
+	token.LastUsedAt = timestampPtr(lastUsedAt)
+	token.RevokedAt = timestampPtr(revokedAt)
+	return token, nil
+}
+
+func timestampPtr(value pgtype.Timestamp) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	t := value.Time
+	return &t
 }
 
 func scanUser(row pgx.Row) (*User, error) {

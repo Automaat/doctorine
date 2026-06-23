@@ -17,6 +17,7 @@ const (
 type Handler struct {
 	users        UserStore
 	sessions     SessionStore
+	tokens       PersonalTokenStore
 	logger       *slog.Logger
 	cookieSecure bool
 }
@@ -25,7 +26,13 @@ func NewHandler(store *Store, cookieSecure bool, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{users: store, sessions: store, cookieSecure: cookieSecure, logger: logger}
+	return &Handler{
+		users:        store,
+		sessions:     store,
+		tokens:       store,
+		cookieSecure: cookieSecure,
+		logger:       logger,
+	}
 }
 
 type loginRequest struct {
