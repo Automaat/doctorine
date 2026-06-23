@@ -91,6 +91,22 @@ export interface ResultDefinition {
 	updated_at: string;
 }
 
+export type TestOrderStatus = 'requested' | 'completed' | 'canceled';
+
+export interface TestOrder {
+	id: number;
+	source: string;
+	test_keys: string[];
+	reason: string | null;
+	status: TestOrderStatus;
+	requested_on: string;
+	due_on: string | null;
+	examination_id: number | null;
+	notes: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export type TokenScope = 'full' | 'read';
 
 export interface PersonalToken {

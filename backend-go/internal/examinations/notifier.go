@@ -26,6 +26,7 @@ const (
 type ExaminationCreatedEvent struct {
 	ExaminationID   int      `json:"examination_id"`
 	ExamDate        string   `json:"exam_date"`
+	TestKeys        []string `json:"test_keys"`
 	FlaggedTestKeys []string `json:"flagged_test_keys"`
 }
 
@@ -138,10 +139,20 @@ func flaggedTestKeys(results []Result) []string {
 	return keys
 }
 
+// allTestKeys returns every result's test_key, in display order.
+func allTestKeys(results []Result) []string {
+	keys := make([]string, 0, len(results))
+	for _, result := range results {
+		keys = append(keys, result.TestKey)
+	}
+	return keys
+}
+
 func buildExaminationCreatedEvent(item Examination) ExaminationCreatedEvent {
 	return ExaminationCreatedEvent{
 		ExaminationID:   item.ID,
 		ExamDate:        item.ExamDate,
+		TestKeys:        allTestKeys(item.Results),
 		FlaggedTestKeys: flaggedTestKeys(item.Results),
 	}
 }

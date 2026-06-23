@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatBytes, formatDate } from '$lib/format';
+	import { dueLabel, testKeysLabel } from '$lib/testOrders';
 	import type { ExaminationResult } from '$lib/types';
 	import {
 		buildFlaggedByTest,
@@ -31,6 +32,7 @@
 		AlertTriangle,
 		CalendarCheck,
 		CalendarDays,
+		ClipboardList,
 		FileText,
 		Gauge,
 		Stethoscope,
@@ -43,6 +45,8 @@
 	const todayDate = isoDate(new Date());
 
 	let { data }: { data: PageData } = $props();
+
+	const pendingOrders = $derived(data.testOrders ?? []);
 
 	const examinations = $derived(
 		[...(data.examinations ?? [])].sort((left, right) =>
@@ -204,6 +208,34 @@
 			</div>
 		{/each}
 	</div>
+
+	{#if pendingOrders.length > 0}
+		<section class="dashboard-panel">
+			<div class="flex items-center gap-2">
+				<ClipboardList class="text-primary-600" size={18} />
+				<h2 class="section-title">Requested by coach</h2>
+			</div>
+			<ul class="mt-3 space-y-2">
+				{#each pendingOrders as order (order.id)}
+					<li
+						class="flex flex-col gap-2 rounded-md border border-surface-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+					>
+						<div class="min-w-0">
+							<div class="font-semibold">{testKeysLabel(order)}</div>
+							{#if order.reason}
+								<div class="text-sm text-surface-700">{order.reason}</div>
+							{/if}
+							<div class="text-xs text-surface-600">{dueLabel(order)}</div>
+						</div>
+						<a href="/examinations" class="btn btn-sm preset-tonal-primary-500 w-fit shrink-0">
+							<Stethoscope size={16} />
+							<span>Add results</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 
 	<section class="dashboard-panel">
 		<div class="flex items-start justify-between gap-3">
