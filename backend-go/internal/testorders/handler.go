@@ -213,7 +213,7 @@ func validateTestKeys(raw []string) ([]string, string) {
 }
 
 func validStatus(status string) bool {
-	return status == StatusRequested || status == StatusCompleted || status == StatusCancelled
+	return status == StatusRequested || status == StatusCompleted || status == StatusCanceled
 }
 
 func cleanOptional(value *string) *string {

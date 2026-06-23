@@ -65,8 +65,8 @@ func TestStoreCRUDAndListFilter(t *testing.T) {
 	if err := store.Cancel(ctx, 99999); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("cancel missing err = %v, want ErrNotFound", err)
 	}
-	after, _ := store.List(ctx, StatusCancelled)
-	if len(after) != 1 || after[0].Status != StatusCancelled {
+	after, _ := store.List(ctx, StatusCanceled)
+	if len(after) != 1 || after[0].Status != StatusCanceled {
 		t.Fatalf("after cancel = %+v", after)
 	}
 }

@@ -92,7 +92,8 @@ func (s *Store) Update(ctx context.Context, id int, params UpdateParams) (Order,
 }
 
 // Cancel marks an order canceled. It returns ErrNotFound when no order has the
-// id, and is a no-op for an already-canceled order.
+// id; re-canceling an already-canceled order is idempotent in outcome (the
+// status stays canceled, though updated_at is refreshed).
 func (s *Store) Cancel(ctx context.Context, id int) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE test_orders

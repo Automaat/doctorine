@@ -6,7 +6,7 @@ import "time"
 const (
 	StatusRequested = "requested"
 	StatusCompleted = "completed"
-	StatusCancelled = "canceled"
+	StatusCanceled  = "canceled"
 )
 
 // Order is a lab test request, typically created by the coach, that the user
