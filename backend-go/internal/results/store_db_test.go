@@ -90,11 +90,13 @@ func TestTrendByTestKey(t *testing.T) {
 	store := NewStore(pool)
 
 	jan := insertExam(ctx, t, pool, "2026-01-01")
+	feb := insertExam(ctx, t, pool, "2026-02-01")
 	mar := insertExam(ctx, t, pool, "2026-03-01")
 	insertResult(ctx, t, pool, mar, "ferrytyna", "Ferrytyna", 80)
 	insertResult(ctx, t, pool, jan, "ferrytyna", "Ferrytyna", 30)
-	// A textual-only row for the same key must be excluded from the series.
-	insertText(ctx, t, pool, jan, "opis", "Opis", "prawidłowy")
+	// A value_text-only row for the SAME marker (its own examination, since
+	// (examination_id, test_key) is unique) must be excluded from the series.
+	insertText(ctx, t, pool, feb, "ferrytyna", "Ferrytyna", "nieoznaczono")
 
 	series, err := store.TrendByTestKey(ctx, "ferrytyna", 36500)
 	if err != nil {
