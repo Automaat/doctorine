@@ -62,8 +62,9 @@ func (s *Store) LatestByTestKeys(ctx context.Context, keys []string) ([]LatestRe
 	return items, rows.Err()
 }
 
-// TrendByTestKey returns the dated numeric series for a single test_key over the
-// last `days` days, oldest first. Rows without a numeric value are omitted so
+// TrendByTestKey returns the dated numeric series for a single test_key, oldest
+// first. The window is inclusive: every result whose exam_date is on or after
+// (today - days) UTC is returned. Rows without a numeric value are omitted so
 // the series is directly chartable.
 func (s *Store) TrendByTestKey(ctx context.Context, testKey string, days int) ([]TrendPoint, error) {
 	rows, err := s.pool.Query(ctx, `

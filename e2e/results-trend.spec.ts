@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test';
 // Exercises the result-trend endpoint end-to-end against the real backend +
 // Postgres, covering the dated-series query (ordering + day window) in CI.
 test('result trend returns the dated numeric series oldest first', async ({ request }) => {
-	const key = 'e2e_marker_trend';
+	// Unique per retry so a retried run starts from a clean key (POSTs are not
+	// idempotent and the trend query does not collapse duplicates).
+	const key = `e2e_marker_trend_${test.info().retry}`;
 
 	const jan = await request.post('/api/examinations', {
 		data: {

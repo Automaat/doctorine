@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 // backend + Postgres, so the DISTINCT ON "newest exam_date wins" query is
 // covered in CI (the Go unit job has no database).
 test('latest results returns the newest value per test_key', async ({ request }) => {
-	const key = 'e2e_marker_latest';
+	const key = `e2e_marker_latest_${test.info().retry}`;
 
 	const older = await request.post('/api/examinations', {
 		data: {
