@@ -37,6 +37,15 @@ export interface Supplement {
 	updated_at: string;
 }
 
+export interface WeightEntry {
+	id: number;
+	measured_on: string;
+	weight_kg: number;
+	notes: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface Examination {
 	id: number;
 	title: string;
