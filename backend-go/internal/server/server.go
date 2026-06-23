@@ -17,6 +17,7 @@ import (
 	"github.com/Automaat/doctorine/backend-go/internal/illnesses"
 	"github.com/Automaat/doctorine/backend-go/internal/metrics"
 	"github.com/Automaat/doctorine/backend-go/internal/overview"
+	"github.com/Automaat/doctorine/backend-go/internal/results"
 	"github.com/Automaat/doctorine/backend-go/internal/supplements"
 	"github.com/Automaat/doctorine/backend-go/internal/weights"
 )
@@ -109,6 +110,7 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), logger)
 		supplementHandler := supplements.NewHandler(supplements.NewStore(pool), logger)
 		weightHandler := weights.NewHandler(weights.NewStore(pool), logger)
+		resultHandler := results.NewHandler(results.NewStore(pool), logger)
 		overviewHandler := overview.NewHandler(pool, documentStore, logger)
 
 		r.Get("/api/overview", overviewHandler.Get)
@@ -119,6 +121,7 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		r.Get("/api/weights", weightHandler.List)
 		r.Post("/api/weights", weightHandler.Create)
 		r.Delete("/api/weights/{id}", weightHandler.Delete)
+		r.Get("/api/results/latest", resultHandler.Latest)
 		r.Get("/api/examinations", examinationHandler.List)
 		r.Get("/api/examinations/{id}", examinationHandler.Get)
 		r.Post("/api/examinations", examinationHandler.Create)
