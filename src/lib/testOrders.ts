@@ -5,12 +5,21 @@ export function testKeysLabel(order: TestOrder): string {
 	return order.test_keys.join(', ');
 }
 
-/** isOverdue is true when the order has a due date that has already passed. */
+/** localDate formats a Date as YYYY-MM-DD in the local timezone. */
+function localDate(now: Date): string {
+	const year = now.getFullYear();
+	const month = String(now.getMonth() + 1).padStart(2, '0');
+	const day = String(now.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}
+
+/**
+ * isOverdue is true when the order's due date is before today (local). Comparing
+ * calendar dates avoids timezone skew at the day boundary.
+ */
 export function isOverdue(order: TestOrder, now: Date = new Date()): boolean {
 	if (!order.due_on) return false;
-	const due = new Date(`${order.due_on}T23:59:59Z`);
-	if (Number.isNaN(due.getTime())) return false;
-	return due.getTime() < now.getTime();
+	return order.due_on < localDate(now);
 }
 
 /** dueLabel renders an order's due date, flagging overdue orders. */

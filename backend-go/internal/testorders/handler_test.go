@@ -168,6 +168,18 @@ func TestUpdateNotFound(t *testing.T) {
 	}
 }
 
+func TestUpdateRejectsUnknownExamination(t *testing.T) {
+	repo := &fakeRepo{updateErr: ErrExaminationNotFound}
+	req := withID(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/test-orders/1",
+		strings.NewReader(`{"examination_id":9999}`)), "1")
+	req.Header.Set("content-type", "application/json")
+	rec := httptest.NewRecorder()
+	handler(repo).Update(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 (%s)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestDeleteCancels(t *testing.T) {
 	repo := &fakeRepo{}
 	req := withID(httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/test-orders/3", http.NoBody), "3")

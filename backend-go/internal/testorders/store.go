@@ -7,13 +7,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Automaat/doctorine/backend-go/internal/healthstatus"
 )
 
-var ErrNotFound = errors.New("test order not found")
+var (
+	ErrNotFound = errors.New("test order not found")
+	// ErrExaminationNotFound is returned when linking an order to an examination
+	// id that does not exist (the FK rejects it).
+	ErrExaminationNotFound = errors.New("examination not found")
+)
+
+const fkViolationCode = "23503"
 
 const orderColumns = `id, source, test_keys, reason, status, requested_on, due_on,
 	examination_id, notes, created_at, updated_at`
@@ -70,10 +78,17 @@ func (s *Store) Update(ctx context.Context, id int, params UpdateParams) (Order,
 		WHERE id = $1
 		RETURNING `+orderColumns, id, params.Status, params.ExaminationID, params.Notes)
 	order, err := scanOrder(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Order{}, ErrNotFound
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Order{}, ErrNotFound
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == fkViolationCode {
+			return Order{}, ErrExaminationNotFound
+		}
+		return Order{}, err
 	}
-	return order, err
+	return order, nil
 }
 
 // Cancel marks an order canceled. It returns ErrNotFound when no order has the

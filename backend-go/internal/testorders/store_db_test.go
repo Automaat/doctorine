@@ -92,6 +92,13 @@ func TestStoreUpdateLinksExamination(t *testing.T) {
 	if _, err := store.Update(ctx, 99999, UpdateParams{Status: &status}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("update missing err = %v, want ErrNotFound", err)
 	}
+
+	// Linking to a non-existent examination is a foreign-key violation, mapped
+	// to a typed error (rendered 422) rather than an opaque failure.
+	badExam := 9999999
+	if _, err := store.Update(ctx, order.ID, UpdateParams{ExaminationID: &badExam}); !errors.Is(err, ErrExaminationNotFound) {
+		t.Fatalf("update bad examination err = %v, want ErrExaminationNotFound", err)
+	}
 }
 
 func TestCompleteMatching(t *testing.T) {

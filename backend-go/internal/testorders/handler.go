@@ -109,6 +109,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteDetailError(w, http.StatusNotFound, "Test order not found")
 			return
 		}
+		if errors.Is(err, ErrExaminationNotFound) {
+			httputil.WriteDetailError(w, http.StatusUnprocessableEntity, "Examination not found")
+			return
+		}
 		h.logger.Error("update test order", "err", err)
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
