@@ -82,9 +82,6 @@ linters:
       excludes:
         - G304
         - G124
-        # Outbound webhook URL is operator-configured (DOCTORINE_WEBHOOK_URL),
-        # never user input, so SSRF taint analysis is a false positive here.
-        - G704
 
     govet:
       enable-all: true
@@ -130,6 +127,14 @@ linters:
           - funlen
           - gosec
         path: _test\.go
+      # The examination webhook posts to an operator-configured URL
+      # (DOCTORINE_WEBHOOK_URL), never user input, so gosec's SSRF taint
+      # analysis is a false positive. Scoped to this file so G704 stays active
+      # everywhere else.
+      - linters:
+          - gosec
+        path: internal/examinations/notifier\.go
+        text: G704
 
 formatters:
   enable:
