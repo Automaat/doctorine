@@ -35,7 +35,7 @@ func TestCreateFiresWebhook(t *testing.T) {
 	}
 
 	spy := &spyNotifier{}
-	h := NewHandler(NewStore(pool), spy, slog.Default())
+	h := NewHandler(NewStore(pool), slog.Default(), spy)
 
 	body := `{
 		"title": "Webhook labs",

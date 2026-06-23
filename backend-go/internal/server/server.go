@@ -20,6 +20,7 @@ import (
 	"github.com/Automaat/doctorine/backend-go/internal/overview"
 	"github.com/Automaat/doctorine/backend-go/internal/results"
 	"github.com/Automaat/doctorine/backend-go/internal/supplements"
+	"github.com/Automaat/doctorine/backend-go/internal/testorders"
 	"github.com/Automaat/doctorine/backend-go/internal/weights"
 )
 
@@ -104,10 +105,12 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 	r.Post("/api/auth/logout", authHandler.Logout)
 
 	drain := func(context.Context) {}
-	var examinationNotifier examinations.Notifier
+	testOrderStore := testorders.NewStore(pool)
+	// Auto-complete matching coach orders whenever an examination is created.
+	notifiers := []examinations.Notifier{testorders.NewCompleter(testOrderStore, logger)}
 	if cfg.WebhookURL != "" {
 		httpNotifier := examinations.NewHTTPNotifier(cfg.WebhookURL, logger)
-		examinationNotifier = httpNotifier
+		notifiers = append(notifiers, httpNotifier)
 		drain = httpNotifier.Shutdown
 	}
 
@@ -121,10 +124,11 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		documentStore := documents.NewStore(pool)
 		documentsHandler := documents.NewHandler(documentStore, cfg.UploadDir, logger)
 		illnessHandler := illnesses.NewHandler(illnesses.NewStore(pool), logger)
-		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), examinationNotifier, logger)
+		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), logger, notifiers...)
 		supplementHandler := supplements.NewHandler(supplements.NewStore(pool), logger)
 		weightHandler := weights.NewHandler(weights.NewStore(pool), logger)
 		resultHandler := results.NewHandler(results.NewStore(pool), logger)
+		testOrderHandler := testorders.NewHandler(testOrderStore, logger)
 		overviewHandler := overview.NewHandler(pool, documentStore, logger)
 
 		r.Get("/api/overview", overviewHandler.Get)
@@ -137,6 +141,10 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		r.Delete("/api/weights/{id}", weightHandler.Delete)
 		r.Get("/api/results/latest", resultHandler.Latest)
 		r.Get("/api/results/trend/{test_key}", resultHandler.Trend)
+		r.Post("/api/test-orders", testOrderHandler.Create)
+		r.Get("/api/test-orders", testOrderHandler.List)
+		r.Patch("/api/test-orders/{id}", testOrderHandler.Update)
+		r.Delete("/api/test-orders/{id}", testOrderHandler.Delete)
 		r.Get("/api/examinations", examinationHandler.List)
 		r.Get("/api/examinations/{id}", examinationHandler.Get)
 		r.Post("/api/examinations", examinationHandler.Create)

@@ -16,18 +16,19 @@ import (
 var resultKeyPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 type Handler struct {
-	store    *Store
-	notifier Notifier
-	logger   *slog.Logger
+	store     *Store
+	notifiers []Notifier
+	logger    *slog.Logger
 }
 
-// NewHandler builds the examinations handler. notifier may be nil, in which case
-// no webhook is fired on create.
-func NewHandler(store *Store, notifier Notifier, logger *slog.Logger) *Handler {
+// NewHandler builds the examinations handler. Each notifier is invoked after a
+// successful create (e.g. webhook delivery, auto-completing matching test
+// orders); pass none to disable that behavior.
+func NewHandler(store *Store, logger *slog.Logger, notifiers ...Notifier) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{store: store, notifier: notifier, logger: logger}
+	return &Handler{store: store, notifiers: notifiers, logger: logger}
 }
 
 type createRequest struct {
@@ -105,8 +106,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
-	if h.notifier != nil {
-		h.notifier.ExaminationCreated(buildExaminationCreatedEvent(item))
+	if len(h.notifiers) > 0 {
+		event := buildExaminationCreatedEvent(item)
+		for _, notifier := range h.notifiers {
+			notifier.ExaminationCreated(event)
+		}
 	}
 	httputil.WriteJSON(w, http.StatusCreated, item)
 }
