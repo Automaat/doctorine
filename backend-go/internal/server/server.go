@@ -122,6 +122,7 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		r.Post("/api/weights", weightHandler.Create)
 		r.Delete("/api/weights/{id}", weightHandler.Delete)
 		r.Get("/api/results/latest", resultHandler.Latest)
+		r.Get("/api/results/trend/{test_key}", resultHandler.Trend)
 		r.Get("/api/examinations", examinationHandler.List)
 		r.Get("/api/examinations/{id}", examinationHandler.Get)
 		r.Post("/api/examinations", examinationHandler.Create)

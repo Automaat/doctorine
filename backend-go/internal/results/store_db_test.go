@@ -72,6 +72,56 @@ func TestLatestByTestKeys(t *testing.T) {
 	}
 }
 
+func TestTrendByTestKey(t *testing.T) {
+	dsn := os.Getenv("DOCTORINE_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set DOCTORINE_TEST_DATABASE_URL to run the trend DB test")
+	}
+	ctx := context.Background()
+	pool, err := db.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+	if err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	resetResults(ctx, t, pool)
+	store := NewStore(pool)
+
+	jan := insertExam(ctx, t, pool, "2026-01-01")
+	feb := insertExam(ctx, t, pool, "2026-02-01")
+	mar := insertExam(ctx, t, pool, "2026-03-01")
+	insertResult(ctx, t, pool, mar, "ferrytyna", "Ferrytyna", 80)
+	insertResult(ctx, t, pool, jan, "ferrytyna", "Ferrytyna", 30)
+	// A value_text-only row for the SAME marker (its own examination, since
+	// (examination_id, test_key) is unique) must be excluded from the series.
+	insertText(ctx, t, pool, feb, "ferrytyna", "Ferrytyna", "nieoznaczono")
+
+	series, err := store.TrendByTestKey(ctx, "ferrytyna", 36500)
+	if err != nil {
+		t.Fatalf("trend: %v", err)
+	}
+	if len(series) != 2 {
+		t.Fatalf("trend = %d points, want 2 (%+v)", len(series), series)
+	}
+	// Oldest first.
+	if series[0].ExamDate != "2026-01-01" || series[1].ExamDate != "2026-03-01" {
+		t.Fatalf("trend order = %+v, want ascending by date", series)
+	}
+
+	// A narrow window must exclude the older point.
+	recent, err := store.TrendByTestKey(ctx, "ferrytyna", 1)
+	if err != nil {
+		t.Fatalf("trend recent: %v", err)
+	}
+	for _, p := range recent {
+		if p.ExamDate == "2026-01-01" {
+			t.Fatalf("1-day window leaked an old point: %+v", recent)
+		}
+	}
+}
+
 func resetResults(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	if _, err := pool.Exec(ctx, `TRUNCATE examination_results, examinations RESTART IDENTITY CASCADE`); err != nil {
@@ -99,5 +149,16 @@ func insertResult(ctx context.Context, t *testing.T, pool *pgxpool.Pool, examID 
 	`, examID, key, name, value)
 	if err != nil {
 		t.Fatalf("insert result: %v", err)
+	}
+}
+
+func insertText(ctx context.Context, t *testing.T, pool *pgxpool.Pool, examID int, key, name, text string) {
+	t.Helper()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO examination_results (examination_id, test_key, name, value_text)
+		VALUES ($1, $2, $3, $4)
+	`, examID, key, name, text)
+	if err != nil {
+		t.Fatalf("insert text result: %v", err)
 	}
 }

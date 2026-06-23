@@ -62,6 +62,40 @@ func (s *Store) LatestByTestKeys(ctx context.Context, keys []string) ([]LatestRe
 	return items, rows.Err()
 }
 
+// TrendByTestKey returns the dated numeric series for a single test_key, oldest
+// first. The window is inclusive: every result whose exam_date is on or after
+// (today - days) UTC is returned. Rows without a numeric value are omitted so
+// the series is directly chartable.
+func (s *Store) TrendByTestKey(ctx context.Context, testKey string, days int) ([]TrendPoint, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.exam_date, er.value_numeric, er.flag
+		FROM examination_results er
+		JOIN examinations e ON e.id = er.examination_id
+		WHERE er.test_key = $1
+			AND er.value_numeric IS NOT NULL
+			AND e.exam_date >= ((now() at time zone 'utc')::date - $2::int)
+		ORDER BY e.exam_date ASC, er.id ASC
+	`, testKey, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := []TrendPoint{}
+	for rows.Next() {
+		var point TrendPoint
+		var examDate pgtype.Date
+		var valueNumeric pgtype.Float8
+		if err := rows.Scan(&examDate, &valueNumeric, &point.Flag); err != nil {
+			return nil, fmt.Errorf("scan trend point: %w", err)
+		}
+		point.ExamDate = healthstatus.FormatRequiredDate(examDate)
+		point.ValueNumeric = float64Ptr(valueNumeric)
+		points = append(points, point)
+	}
+	return points, rows.Err()
+}
+
 func scanLatest(row pgx.Row) (LatestResult, error) {
 	var item LatestResult
 	var examDate pgtype.Date
