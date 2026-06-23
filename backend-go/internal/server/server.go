@@ -99,6 +99,9 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Authenticate(store))
 		r.Get("/api/auth/me", authHandler.Me)
+		r.Get("/api/tokens", authHandler.ListTokens)
+		r.Post("/api/tokens", authHandler.CreateToken)
+		r.Delete("/api/tokens/{id}", authHandler.RevokeToken)
 
 		documentStore := documents.NewStore(pool)
 		documentsHandler := documents.NewHandler(documentStore, cfg.UploadDir, logger)

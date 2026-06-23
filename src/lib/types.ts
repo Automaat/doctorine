@@ -91,6 +91,21 @@ export interface ResultDefinition {
 	updated_at: string;
 }
 
+export type TokenScope = 'full' | 'read';
+
+export interface PersonalToken {
+	id: number;
+	name: string;
+	scope: TokenScope;
+	expires_at: string | null;
+	last_used_at: string | null;
+	created_at: string;
+}
+
+export interface CreatedToken extends PersonalToken {
+	token: string;
+}
+
 export interface Overview {
 	document_count: number;
 	illness_count: number;
