@@ -67,6 +67,7 @@ func run() int {
 		CORSOrigins:  envOr("CORS_ORIGINS", "http://localhost:3001"),
 		CookieSecure: envOr("DOCTORINE_COOKIE_SECURE", "false") == "true",
 		UploadDir:    envOr("DOCTORINE_UPLOAD_DIR", "./data/uploads"),
+		WebhookURL:   os.Getenv("DOCTORINE_WEBHOOK_URL"),
 	}
 	adminUsername := envOr("DOCTORINE_ADMIN_USERNAME", "admin")
 	adminPassword := os.Getenv("DOCTORINE_ADMIN_PASSWORD")
@@ -96,9 +97,10 @@ func run() int {
 		logger.Warn("no DB config; DB-backed endpoints disabled")
 	}
 
+	handler, drainBackground := server.New(cfg, logger, deps)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(cfg, logger, deps),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      120 * time.Second,
@@ -118,12 +120,15 @@ func run() int {
 		}
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("shutdown", "err", err)
 			return 1
 		}
+		// Drain background work (e.g. in-flight webhooks) within the remaining
+		// shutdown budget before exiting.
+		drainBackground(shutdownCtx)
 	}
 	return 0
 }
