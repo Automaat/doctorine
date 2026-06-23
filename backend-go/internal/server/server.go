@@ -29,6 +29,7 @@ type Config struct {
 	CORSOrigins  string
 	CookieSecure bool
 	UploadDir    string
+	WebhookURL   string
 }
 
 type Deps struct {
@@ -107,7 +108,11 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 		documentStore := documents.NewStore(pool)
 		documentsHandler := documents.NewHandler(documentStore, cfg.UploadDir, logger)
 		illnessHandler := illnesses.NewHandler(illnesses.NewStore(pool), logger)
-		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), logger)
+		var examinationNotifier examinations.Notifier
+		if cfg.WebhookURL != "" {
+			examinationNotifier = examinations.NewHTTPNotifier(cfg.WebhookURL, logger)
+		}
+		examinationHandler := examinations.NewHandler(examinations.NewStore(pool), examinationNotifier, logger)
 		supplementHandler := supplements.NewHandler(supplements.NewStore(pool), logger)
 		weightHandler := weights.NewHandler(weights.NewStore(pool), logger)
 		resultHandler := results.NewHandler(results.NewStore(pool), logger)

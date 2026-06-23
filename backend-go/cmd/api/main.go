@@ -67,6 +67,7 @@ func run() int {
 		CORSOrigins:  envOr("CORS_ORIGINS", "http://localhost:3001"),
 		CookieSecure: envOr("DOCTORINE_COOKIE_SECURE", "false") == "true",
 		UploadDir:    envOr("DOCTORINE_UPLOAD_DIR", "./data/uploads"),
+		WebhookURL:   os.Getenv("DOCTORINE_WEBHOOK_URL"),
 	}
 	adminUsername := envOr("DOCTORINE_ADMIN_USERNAME", "admin")
 	adminPassword := os.Getenv("DOCTORINE_ADMIN_PASSWORD")
