@@ -1,4 +1,4 @@
-import type { Examination, ExaminationResult } from '$lib/types';
+import type { Examination, ExaminationResult, WeightEntry } from '$lib/types';
 
 export type ResultRow = {
 	examination: Examination;
@@ -357,6 +357,23 @@ export function trendPoints(rows: ResultRow[], key: string): TrendPoint[] {
 			referenceMin: row.result.reference_min,
 			referenceMax: row.result.reference_max,
 			href: `/examinations/${row.examination.id}`
+		}))
+		.sort((left, right) => left.date.localeCompare(right.date));
+}
+
+// weightTrendPoints converts weight entries into chronological chart points,
+// reusing the lab trend rendering so the dashboard chart stays consistent.
+export function weightTrendPoints(entries: WeightEntry[]): TrendPoint[] {
+	return entries
+		.filter((entry) => Number.isFinite(entry.weight_kg))
+		.map((entry) => ({
+			date: entry.measured_on,
+			value: entry.weight_kg,
+			unit: 'kg',
+			flag: null,
+			referenceMin: null,
+			referenceMax: null,
+			href: '/weights'
 		}))
 		.sort((left, right) => left.date.localeCompare(right.date));
 }

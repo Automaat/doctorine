@@ -21,6 +21,7 @@
 		trackedTests,
 		trendBounds,
 		trendPoints,
+		weightTrendPoints,
 		xFor,
 		yFor
 	} from '$lib/dashboard';
@@ -33,7 +34,8 @@
 		FileText,
 		Gauge,
 		Stethoscope,
-		TrendingUp
+		TrendingUp,
+		Weight
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 
@@ -95,6 +97,9 @@
 			}))
 			.filter((card) => card.points.length > 0)
 	);
+	const weightPoints = $derived.by<TrendPoint[]>(() => weightTrendPoints(data.weights ?? []));
+	const latestWeight = $derived(latestPoint(weightPoints));
+	const weightBounds = $derived.by(() => trendBounds(weightPoints));
 	const yearlyBuckets = $derived.by(() => buildYearlyBuckets(examinations));
 	const recentFlaggedCutoff = lastYearCutoff(new Date());
 	const recentFlaggedRows = $derived.by(() =>
@@ -199,6 +204,70 @@
 			</div>
 		{/each}
 	</div>
+
+	<section class="dashboard-panel">
+		<div class="flex items-start justify-between gap-3">
+			<div>
+				<div class="flex items-center gap-2">
+					<Weight class="text-primary-600" size={18} />
+					<h2 class="section-title">Weight trend</h2>
+				</div>
+				<div class="text-xs text-surface-600">{weightPoints.length} measurements</div>
+			</div>
+			<div class="flex items-center gap-3">
+				{#if latestWeight}
+					<div class="text-right">
+						<div class="text-2xl font-bold">
+							{numberFormat.format(latestWeight.value)}
+							<span class="text-xs font-medium text-surface-600">kg</span>
+						</div>
+						<div class="text-xs text-surface-600">{deltaLabel(weightPoints)}</div>
+					</div>
+				{/if}
+				<a href="/weights" class="btn preset-tonal-primary w-fit"><span>Log weight</span></a>
+			</div>
+		</div>
+		{#if weightPoints.length === 0}
+			<div
+				class="mt-3 rounded-md border border-dashed border-surface-300 bg-white p-6 text-sm text-surface-700"
+			>
+				No weight recorded yet.
+				<a href="/weights" class="font-semibold text-primary-700 hover:underline"
+					>Add your first measurement.</a
+				>
+			</div>
+		{:else}
+			<svg
+				class="trend-chart"
+				viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+				role="img"
+				aria-label="Weight trend"
+			>
+				<rect
+					x={chartPaddingX}
+					y={chartPaddingTop}
+					width={chartWidth - chartPaddingX * 2}
+					height={chartHeight - chartPaddingTop - chartPaddingBottom}
+					class="trend-plot"
+				/>
+				<path d={linePath(weightPoints)} class="trend-line" />
+				{#each weightPoints as point, index}
+					<a href={point.href} aria-label={`Weight ${formatDate(point.date)}`}>
+						<circle
+							cx={xFor(index, weightPoints.length)}
+							cy={yFor(point.value, weightBounds)}
+							r="4"
+							class="trend-point"
+						/>
+					</a>
+				{/each}
+			</svg>
+			<div class="flex items-center justify-between text-xs text-surface-600">
+				<span>{formatDate(weightPoints[0]?.date)}</span>
+				<span>{formatDate(weightPoints[weightPoints.length - 1]?.date)}</span>
+			</div>
+		{/if}
+	</section>
 
 	<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 		<section class="space-y-3">

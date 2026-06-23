@@ -1,7 +1,16 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/stores';
-	import { Activity, FileText, HeartPulse, LogOut, Pill, Stethoscope, User } from 'lucide-svelte';
+	import {
+		Activity,
+		FileText,
+		HeartPulse,
+		LogOut,
+		Pill,
+		Stethoscope,
+		User,
+		Weight
+	} from 'lucide-svelte';
 	import type { LayoutData } from './$types';
 
 	let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
@@ -11,6 +20,7 @@
 		{ href: '/documents', label: 'Documents', icon: FileText },
 		{ href: '/examinations', label: 'Exams', icon: Stethoscope },
 		{ href: '/supplements', label: 'Supplements', icon: Pill },
+		{ href: '/weights', label: 'Weight', icon: Weight },
 		{ href: '/illnesses', label: 'Illnesses', icon: HeartPulse }
 	];
 
@@ -83,7 +93,7 @@
 			</main>
 
 			<nav
-				class="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-surface-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+				class="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-6 border-t border-surface-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
 				aria-label="Mobile navigation"
 			>
 				{#each nav as item}

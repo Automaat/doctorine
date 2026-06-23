@@ -20,6 +20,7 @@ func SeedDemoData(ctx context.Context, pool *pgxpool.Pool) error {
 
 	statements := []string{
 		seedSupplementsSQL,
+		seedWeightsSQL,
 		seedIllnessesSQL,
 		seedResultDefinitionsSQL,
 		seedExaminationsSQL,
@@ -53,6 +54,24 @@ WHERE NOT EXISTS (
 		AND s.value_text = seed.value_text
 		AND s.frequency = seed.frequency
 );
+`
+
+const seedWeightsSQL = `
+INSERT INTO weight_entries (measured_on, weight_kg, notes)
+SELECT measured_on::date, weight_kg, notes
+FROM (
+	VALUES
+		('2026-01-05', 82.4, 'Demo data: post-holiday baseline'),
+		('2026-01-26', 81.6, NULL),
+		('2026-02-16', 80.9, 'Demo data: cut going well'),
+		('2026-03-09', 80.1, NULL),
+		('2026-03-30', 79.4, NULL),
+		('2026-04-20', 78.8, 'Demo data: plateau'),
+		('2026-05-11', 78.9, NULL),
+		('2026-06-01', 78.2, 'Demo data: back on track'),
+		('2026-06-22', 77.6, NULL)
+) AS seed(measured_on, weight_kg, notes)
+ON CONFLICT (measured_on) DO NOTHING;
 `
 
 const seedIllnessesSQL = `

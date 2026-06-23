@@ -13,6 +13,9 @@ test('dashboard and primary pages load', async ({ page }) => {
 	await page.getByRole('link', { name: 'Supplements' }).first().click();
 	await expect(page.getByRole('heading', { name: 'Supplements' })).toBeVisible();
 
+	await page.getByRole('link', { name: 'Weight' }).first().click();
+	await expect(page.getByRole('heading', { name: 'Weight' })).toBeVisible();
+
 	await page.getByRole('link', { name: 'Illnesses' }).first().click();
 	await expect(page.getByRole('heading', { name: 'Illnesses' })).toBeVisible();
 });

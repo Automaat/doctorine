@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Examination, ExaminationResult } from './types';
+import type { Examination, ExaminationResult, WeightEntry } from './types';
 import {
 	addMonths,
 	buildReminders,
@@ -10,9 +10,42 @@ import {
 	resultFlag,
 	trendBounds,
 	trendPoints,
+	weightTrendPoints,
 	xFor,
 	type ReminderRule
 } from './dashboard';
+
+function makeWeight(overrides: Partial<WeightEntry> = {}): WeightEntry {
+	return {
+		id: 1,
+		measured_on: '2026-01-05',
+		weight_kg: 82,
+		notes: null,
+		created_at: '2026-01-05T00:00:00Z',
+		updated_at: '2026-01-05T00:00:00Z',
+		...overrides
+	};
+}
+
+describe('weightTrendPoints', () => {
+	it('sorts entries chronologically and tags them as kg', () => {
+		const points = weightTrendPoints([
+			makeWeight({ id: 2, measured_on: '2026-03-09', weight_kg: 80.1 }),
+			makeWeight({ id: 1, measured_on: '2026-01-05', weight_kg: 82.4 })
+		]);
+		expect(points.map((point) => point.date)).toEqual(['2026-01-05', '2026-03-09']);
+		expect(points[0]).toMatchObject({ value: 82.4, unit: 'kg', href: '/weights' });
+	});
+
+	it('drops entries without a finite weight', () => {
+		const points = weightTrendPoints([
+			makeWeight({ weight_kg: Number.NaN }),
+			makeWeight({ id: 2, measured_on: '2026-02-01', weight_kg: 81 })
+		]);
+		expect(points).toHaveLength(1);
+		expect(points[0].value).toBe(81);
+	});
+});
 
 function makeResult(overrides: Partial<ExaminationResult> = {}): ExaminationResult {
 	return {
