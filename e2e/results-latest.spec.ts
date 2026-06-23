@@ -16,7 +16,7 @@ test('latest results returns the newest value per test_key', async ({ request })
 					name: 'E2E Marker',
 					value_numeric: 30,
 					reference_min: 40,
-					reference_max: 400
+					reference_max: 100
 				}
 			]
 		}
@@ -33,7 +33,7 @@ test('latest results returns the newest value per test_key', async ({ request })
 					name: 'E2E Marker',
 					value_numeric: 120,
 					reference_min: 40,
-					reference_max: 400
+					reference_max: 100
 				}
 			]
 		}

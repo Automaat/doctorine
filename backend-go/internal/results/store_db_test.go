@@ -60,6 +60,16 @@ func TestLatestByTestKeys(t *testing.T) {
 	if len(filtered) != 1 || filtered[0].TestKey != "tsh" {
 		t.Fatalf("filtered = %+v, want only tsh", filtered)
 	}
+
+	// A nil slice must behave like an empty slice ("all keys"), not encode as
+	// SQL NULL and return nothing.
+	viaNil, err := store.LatestByTestKeys(ctx, nil)
+	if err != nil {
+		t.Fatalf("latest nil: %v", err)
+	}
+	if len(viaNil) != 2 {
+		t.Fatalf("latest nil = %d rows, want 2", len(viaNil))
+	}
 }
 
 func resetResults(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {

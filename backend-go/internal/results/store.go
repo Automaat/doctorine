@@ -24,6 +24,11 @@ func NewStore(pool *pgxpool.Pool) *Store {
 // the requested keys that have at least one result appear. Recency is decided by
 // the owning examination's exam_date (newest wins), breaking ties on result id.
 func (s *Store) LatestByTestKeys(ctx context.Context, keys []string) ([]LatestResult, error) {
+	// pgx encodes a nil slice as SQL NULL, which would make cardinality()
+	// return NULL and filter out every row. Normalize so nil means "all keys".
+	if keys == nil {
+		keys = []string{}
+	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (er.test_key)
 			er.test_key,
