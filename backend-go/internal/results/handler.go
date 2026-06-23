@@ -5,26 +5,35 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/Automaat/doctorine/backend-go/internal/httputil"
 )
 
 var testKeyPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
-const maxTestKeys = 100
+const (
+	maxTestKeys    = 100
+	defaultDays    = 365
+	maxTrendDays   = 36500
+	maxTestKeySize = 120
+)
 
-// LatestStore reads the most recent result per test_key.
-type LatestStore interface {
+// Reader reads results for the coaching endpoints.
+type Reader interface {
 	LatestByTestKeys(ctx context.Context, keys []string) ([]LatestResult, error)
+	TrendByTestKey(ctx context.Context, testKey string, days int) ([]TrendPoint, error)
 }
 
 type Handler struct {
-	store  LatestStore
+	store  Reader
 	logger *slog.Logger
 }
 
-func NewHandler(store LatestStore, logger *slog.Logger) *Handler {
+func NewHandler(store Reader, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -46,6 +55,44 @@ func (h *Handler) Latest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, items)
+}
+
+// Trend handles GET /api/results/trend/{test_key}?days=365, returning the dated
+// numeric series for a single marker over the window (default 365 days).
+func (h *Handler) Trend(w http.ResponseWriter, r *http.Request) {
+	testKey := strings.TrimSpace(chi.URLParam(r, "test_key"))
+	if testKey == "" || len(testKey) > maxTestKeySize || !testKeyPattern.MatchString(testKey) {
+		httputil.WriteDetailError(w, http.StatusBadRequest, "Invalid test_key")
+		return
+	}
+	days, detail := parseDays(r.URL.Query().Get("days"))
+	if detail != "" {
+		httputil.WriteDetailError(w, http.StatusBadRequest, detail)
+		return
+	}
+	points, err := h.store.TrendByTestKey(r.Context(), testKey, days)
+	if err != nil {
+		h.logger.Error("result trend", "err", err)
+		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, points)
+}
+
+// parseDays validates the optional days window. A blank value defaults to 365.
+func parseDays(raw string) (int, string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultDays, ""
+	}
+	days, err := strconv.Atoi(raw)
+	if err != nil || days < 1 {
+		return 0, "days must be a positive integer"
+	}
+	if days > maxTrendDays {
+		return 0, "days cannot exceed 36500"
+	}
+	return days, ""
 }
 
 // parseTestKeys splits and validates a comma-separated test_keys parameter,

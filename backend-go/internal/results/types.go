@@ -14,3 +14,11 @@ type LatestResult struct {
 	ReferenceMax *float64 `json:"reference_max"`
 	Flag         *string  `json:"flag"`
 }
+
+// TrendPoint is one dated numeric measurement of a single test_key, for trend
+// analysis or pre-computed charts.
+type TrendPoint struct {
+	ExamDate     string   `json:"exam_date"`
+	ValueNumeric *float64 `json:"value_numeric"`
+	Flag         *string  `json:"flag"`
+}
