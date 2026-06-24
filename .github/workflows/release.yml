@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  schedule:
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       version:
@@ -13,7 +15,43 @@ permissions:
   packages: write
 
 jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      should_release: ${{ steps.gate.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether to release
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Manual run; releasing."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "No release tag yet; releasing."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          COUNT=$(git rev-list --count "$LATEST..HEAD")
+          echo "$COUNT commit(s) on main since $LATEST"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No new commits since $LATEST; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
