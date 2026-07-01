@@ -2,8 +2,28 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
+const svelteKitCookieImport = "import { parse, serialize } from 'cookie';";
+
+function svelteKitCookieV2Compat() {
+	return {
+		name: 'doctorine-sveltekit-cookie-v2-compat',
+		enforce: 'pre' as const,
+		transform(code: string, id: string) {
+			const normalizedId = id.replaceAll('\\', '/');
+			if (!normalizedId.includes('/@sveltejs/kit/src/runtime/server/cookie.js')) return null;
+			if (!code.includes(svelteKitCookieImport)) return null;
+
+			// SvelteKit 2.68 still imports cookie's v1 API names; cookie v2 renamed them.
+			return code.replace(
+				svelteKitCookieImport,
+				"import { parse, serialize } from '$lib/server/cookie-v2-compat';"
+			);
+		}
+	};
+}
+
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [svelteKitCookieV2Compat(), tailwindcss(), sveltekit()],
 	resolve: {
 		conditions: ['browser']
 	},
