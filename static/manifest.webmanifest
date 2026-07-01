@@ -1,0 +1,27 @@
+{
+	"name": "Doctorine",
+	"short_name": "Doctorine",
+	"description": "Private health status and medical document manager.",
+	"id": "/",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "portrait-primary",
+	"theme_color": "#e11d48",
+	"background_color": "#fff1f2",
+	"categories": ["medical", "productivity", "utilities"],
+	"icons": [
+		{
+			"src": "/pwa-192x192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/pwa-512x512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	]
+}
