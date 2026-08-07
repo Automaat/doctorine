@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # renovate: datasource=go depName=go.uber.org/nilaway
-NILAWAY_VERSION="v0.0.0-20260805165912-0e0bdab51bd2"
+NILAWAY_VERSION="v0.0.0-20260807005220-a166d2f0e942"
 
 if [[ $# -lt 1 ]]; then
 	echo "Usage: $0 <module-dir> [include-pkgs]" >&2
