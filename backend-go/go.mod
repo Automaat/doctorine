@@ -3,7 +3,7 @@ module github.com/Automaat/doctorine/backend-go
 go 1.26.0
 
 require (
-	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/tern/v2 v2.4.3
