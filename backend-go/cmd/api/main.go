@@ -69,6 +69,15 @@ func run() int {
 		UploadDir:    envOr("DOCTORINE_UPLOAD_DIR", "./data/uploads"),
 		WebhookURL:   os.Getenv("DOCTORINE_WEBHOOK_URL"),
 	}
+	oidcCfg, oidcEnabled, err := auth.LoadOIDCConfig(os.Getenv)
+	if err != nil {
+		logger.Error("load OIDC config", "err", err)
+		return 2
+	}
+	if oidcEnabled {
+		cfg.OIDC = &oidcCfg
+		logger.Info("OIDC login enabled", "issuer", oidcCfg.IssuerURL, "client_id", oidcCfg.ClientID)
+	}
 	adminUsername := envOr("DOCTORINE_ADMIN_USERNAME", "admin")
 	adminPassword := os.Getenv("DOCTORINE_ADMIN_PASSWORD")
 	if adminPassword == "" {

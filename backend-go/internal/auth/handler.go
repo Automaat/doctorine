@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -75,24 +77,37 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteDetailError(w, http.StatusUnauthorized, "Invalid username or password")
 		return
 	}
+	token, err := h.startSession(r.Context(), w, user, req.RememberMe)
+	if err != nil {
+		h.logger.Error("start session", "err", err)
+		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, loginResponse{Token: token, User: toUserResponse(user)})
+}
+
+// startSession creates a server-side session for user and sets the session
+// cookie. Password and OIDC login share it so both produce identical sessions.
+func (h *Handler) startSession(
+	ctx context.Context,
+	w http.ResponseWriter,
+	user *User,
+	remember bool,
+) (string, error) {
 	ttl := sessionTTL
-	if req.RememberMe {
+	if remember {
 		ttl = rememberTTL
 	}
 	token, tokenHash, err := GenerateSessionToken()
 	if err != nil {
-		h.logger.Error("generate session token", "err", err)
-		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
+		return "", fmt.Errorf("generate session token: %w", err)
 	}
 	expiresAt := time.Now().UTC().Add(ttl)
-	if err := h.sessions.CreateSession(r.Context(), user.ID, tokenHash, expiresAt); err != nil {
-		h.logger.Error("create session", "err", err)
-		httputil.WriteDetailError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
+	if err := h.sessions.CreateSession(ctx, user.ID, tokenHash, expiresAt); err != nil {
+		return "", fmt.Errorf("create session: %w", err)
 	}
-	h.setSessionCookie(w, token, req.RememberMe, ttl)
-	httputil.WriteJSON(w, http.StatusOK, loginResponse{Token: token, User: toUserResponse(user)})
+	h.setSessionCookie(w, token, remember, ttl)
+	return token, nil
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {

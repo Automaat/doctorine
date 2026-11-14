@@ -1,8 +1,16 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import type { Actions } from './$types';
+import { fetchOIDCEnabled, oidcErrorMessage } from '$lib/oidc';
+import type { Actions, PageServerLoad } from './$types';
 
 const cookieSecure = env.DOCTORINE_COOKIE_SECURE === 'true';
+
+export const load: PageServerLoad = async ({ fetch, url }) => {
+	return {
+		oidcEnabled: await fetchOIDCEnabled(fetch),
+		oidcError: oidcErrorMessage(url.searchParams.get('error'))
+	};
+};
 
 export const actions: Actions = {
 	default: async ({ request, cookies, fetch }) => {
