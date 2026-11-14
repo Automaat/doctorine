@@ -46,7 +46,6 @@ jobs:
         env:
           MISE_PYTHON_COMPILE: '0'
 
-
       - name: Install frontend dependencies
         run: npm ci --include=dev
 
