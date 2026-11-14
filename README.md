@@ -63,8 +63,10 @@ unset to disable it. A partial set fails startup.
 
 - Flow: authorization code with PKCE (S256), `client_secret_basic`,
   scopes `openid profile email`.
-- The ID token's `preferred_username` must exactly match an existing
-  Doctorine username. No users are created; unknown users are refused.
+- `preferred_username` (from the ID token, or from userinfo for the
+  same subject when the ID token omits it, as Authelia does by default)
+  must exactly match an existing Doctorine username. No users are
+  created; unknown users are refused.
 - A successful login creates the same session as the password login.
   Password login and personal access tokens keep working, so they stay
   available as a fallback while the provider is down.

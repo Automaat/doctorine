@@ -27,10 +27,12 @@ const (
 
 // fakeGrant is what the fake provider issues for one authorization code.
 type fakeGrant struct {
-	challenge string
-	nonce     string
-	username  string
-	audience  string
+	challenge       string
+	nonce           string
+	username        string
+	audience        string
+	userinfoOnly    bool
+	userinfoSubject string
 }
 
 // fakeProvider is an in-process OIDC provider: discovery, JWKS and a token
@@ -42,6 +44,7 @@ type fakeProvider struct {
 	mu     sync.Mutex
 	down   bool
 	grants map[string]fakeGrant
+	tokens map[string]fakeGrant
 }
 
 func newFakeProvider(t *testing.T) *fakeProvider {
@@ -50,11 +53,12 @@ func newFakeProvider(t *testing.T) *fakeProvider {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fp := &fakeProvider{t: t, key: key, grants: map[string]fakeGrant{}}
+	fp := &fakeProvider{t: t, key: key, grants: map[string]fakeGrant{}, tokens: map[string]fakeGrant{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", fp.discovery)
 	mux.HandleFunc("GET /jwks", fp.jwks)
 	mux.HandleFunc("POST /token", fp.token)
+	mux.HandleFunc("GET /userinfo", fp.userinfo)
 	fp.srv = httptest.NewServer(mux)
 	t.Cleanup(fp.srv.Close)
 	return fp
@@ -86,6 +90,7 @@ func (fp *fakeProvider) discovery(w http.ResponseWriter, _ *http.Request) {
 		"authorization_endpoint":                base + "/authorize",
 		"token_endpoint":                        base + "/token",
 		"jwks_uri":                              base + "/jwks",
+		"userinfo_endpoint":                     base + "/userinfo",
 		"response_types_supported":              []string{"code"},
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
@@ -126,20 +131,42 @@ func (fp *fakeProvider) token(w http.ResponseWriter, r *http.Request) {
 		audience = testClientID
 	}
 	now := time.Now()
+	claims := map[string]any{
+		"iss":   fp.srv.URL,
+		"sub":   "subject-" + g.username,
+		"aud":   audience,
+		"iat":   now.Unix(),
+		"exp":   now.Add(time.Hour).Unix(),
+		"nonce": g.nonce,
+	}
+	if !g.userinfoOnly {
+		claims["preferred_username"] = g.username
+	}
+	accessToken := "access-" + r.PostForm.Get("code")
+	fp.mu.Lock()
+	fp.tokens[accessToken] = g
+	fp.mu.Unlock()
 	writeTestJSON(w, map[string]any{
-		"access_token": "access-token",
+		"access_token": accessToken,
 		"token_type":   "Bearer",
 		"expires_in":   3600,
-		"id_token": fp.sign(map[string]any{
-			"iss":                fp.srv.URL,
-			"sub":                "subject-" + g.username,
-			"aud":                audience,
-			"iat":                now.Unix(),
-			"exp":                now.Add(time.Hour).Unix(),
-			"nonce":              g.nonce,
-			"preferred_username": g.username,
-		}),
+		"id_token":     fp.sign(claims),
 	})
+}
+
+func (fp *fakeProvider) userinfo(w http.ResponseWriter, r *http.Request) {
+	fp.mu.Lock()
+	g, ok := fp.tokens[strings.TrimPrefix(r.Header.Get("authorization"), "Bearer ")]
+	fp.mu.Unlock()
+	if !ok {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	subject := g.userinfoSubject
+	if subject == "" {
+		subject = "subject-" + g.username
+	}
+	writeTestJSON(w, map[string]any{"sub": subject, "preferred_username": g.username})
 }
 
 func (fp *fakeProvider) sign(claims map[string]any) string {
@@ -337,6 +364,23 @@ func TestOIDCCallback(t *testing.T) {
 		{
 			name:        "existing user gets a session",
 			wantSession: true,
+		},
+		{
+			name: "username from userinfo when the id token omits it",
+			grant: func(ar authRequest) fakeGrant {
+				return fakeGrant{challenge: ar.challenge, nonce: ar.nonce, username: user.Username, userinfoOnly: true}
+			},
+			wantSession: true,
+		},
+		{
+			name: "userinfo for a different subject is rejected",
+			grant: func(ar authRequest) fakeGrant {
+				return fakeGrant{
+					challenge: ar.challenge, nonce: ar.nonce, username: user.Username,
+					userinfoOnly: true, userinfoSubject: "someone-else",
+				}
+			},
+			wantError: OIDCErrorFailed,
 		},
 		{
 			name: "unknown user is rejected without a session",

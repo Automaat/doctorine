@@ -233,8 +233,23 @@ func (o *OIDCHandler) verifiedUsername(
 	if err := idToken.Claims(&claims); err != nil {
 		return "", fmt.Errorf("decode claims: %w", err)
 	}
+	if claims.PreferredUsername != "" {
+		return claims.PreferredUsername, nil
+	}
+	// Authelia (>= 4.39) keeps profile claims out of the ID token unless a
+	// claims policy adds them, so fall back to userinfo for the same subject.
+	info, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
+	if err != nil {
+		return "", fmt.Errorf("userinfo: %w", err)
+	}
+	if info.Subject != idToken.Subject {
+		return "", errors.New("userinfo subject does not match id token")
+	}
+	if err := info.Claims(&claims); err != nil {
+		return "", fmt.Errorf("decode userinfo claims: %w", err)
+	}
 	if claims.PreferredUsername == "" {
-		return "", errors.New("id token has no preferred_username")
+		return "", errors.New("no preferred_username in id token or userinfo")
 	}
 	return claims.PreferredUsername, nil
 }
