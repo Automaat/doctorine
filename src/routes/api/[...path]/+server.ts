@@ -8,7 +8,7 @@ function backendURL(path: string, search: string): string {
 
 const proxy: RequestHandler = async ({ request, params, cookies, url, fetch }) => {
 	const headers = new Headers();
-	for (const name of ['content-type', 'accept']) {
+	for (const name of ['content-type', 'accept', 'cookie']) {
 		const value = request.headers.get(name);
 		if (value) headers.set(name, value);
 	}
@@ -23,7 +23,8 @@ const proxy: RequestHandler = async ({ request, params, cookies, url, fetch }) =
 		headers.set('authorization', inboundAuth);
 	}
 
-	const init: RequestInit = { method: request.method, headers };
+	// Redirects (OIDC login/callback) must reach the browser, not be followed here.
+	const init: RequestInit = { method: request.method, headers, redirect: 'manual' };
 	if (request.method !== 'GET' && request.method !== 'HEAD') {
 		init.body = await request.arrayBuffer();
 	}
@@ -31,9 +32,12 @@ const proxy: RequestHandler = async ({ request, params, cookies, url, fetch }) =
 	const upstream = await fetch(backendURL(params.path, url.search), init);
 	const body = await upstream.arrayBuffer();
 	const responseHeaders = new Headers();
-	for (const name of ['content-type', 'content-disposition', 'content-length']) {
+	for (const name of ['content-type', 'content-disposition', 'content-length', 'location']) {
 		const value = upstream.headers.get(name);
 		if (value) responseHeaders.set(name, value);
+	}
+	for (const cookie of upstream.headers.getSetCookie()) {
+		responseHeaders.append('set-cookie', cookie);
 	}
 	return new Response(body.byteLength > 0 ? body : null, {
 		status: upstream.status,

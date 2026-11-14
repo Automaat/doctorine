@@ -42,3 +42,71 @@ describe('api proxy authorization forwarding', () => {
 		expect(forwardedAuth(e.fetch)).toBeNull();
 	});
 });
+
+function oidcEvent(path: string, upstream: Response, cookieHeader?: string) {
+	const headers = new Headers();
+	if (cookieHeader) headers.set('cookie', cookieHeader);
+	const request = new Request(`http://frontend.test/api/${path}`, { method: 'GET', headers });
+	return {
+		request,
+		params: { path },
+		cookies: { get: () => undefined },
+		url: { search: '?code=abc&state=xyz' },
+		fetch: vi.fn().mockResolvedValue(upstream)
+	};
+}
+
+describe('api proxy redirect and cookie passthrough', () => {
+	it('does not follow redirects and forwards the inbound cookie header', async () => {
+		const e = oidcEvent(
+			'auth/oidc/callback',
+			new Response(null, { status: 302, headers: { location: '/' } }),
+			'doctorine_oidc_state=signed.value; other=1'
+		);
+		await GET(e as unknown as Parameters<typeof GET>[0]);
+		const [target, init] = e.fetch.mock.calls[0] as [string, RequestInit];
+		expect(target).toBe('http://backend.test/api/auth/oidc/callback?code=abc&state=xyz');
+		expect(init.redirect).toBe('manual');
+		expect(new Headers(init.headers).get('cookie')).toBe(
+			'doctorine_oidc_state=signed.value; other=1'
+		);
+	});
+
+	it('passes a 302 with its Location and every Set-Cookie through unchanged', async () => {
+		const upstreamHeaders = new Headers({ location: '/' });
+		const session = 'doctorine_token=sess; Path=/; HttpOnly; Secure; SameSite=Lax';
+		const clearState =
+			'doctorine_oidc_state=; Path=/api/auth/oidc; Max-Age=0; HttpOnly; Secure; SameSite=Lax';
+		upstreamHeaders.append('set-cookie', clearState);
+		upstreamHeaders.append('set-cookie', session);
+		const e = oidcEvent(
+			'auth/oidc/callback',
+			new Response(null, { status: 302, headers: upstreamHeaders })
+		);
+
+		const res = await GET(e as unknown as Parameters<typeof GET>[0]);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get('location')).toBe('/');
+		expect(res.headers.getSetCookie()).toEqual([clearState, session]);
+	});
+
+	it('passes an absolute provider redirect through for the login start', async () => {
+		const authorize = 'https://auth.example.test/api/oidc/authorization?client_id=doctorine';
+		const upstreamHeaders = new Headers({ location: authorize });
+		upstreamHeaders.append(
+			'set-cookie',
+			'doctorine_oidc_state=v.s; Path=/api/auth/oidc; Max-Age=600; HttpOnly; SameSite=Lax'
+		);
+		const e = oidcEvent(
+			'auth/oidc/login',
+			new Response(null, { status: 302, headers: upstreamHeaders })
+		);
+
+		const res = await GET(e as unknown as Parameters<typeof GET>[0]);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get('location')).toBe(authorize);
+		expect(res.headers.getSetCookie()).toHaveLength(1);
+	});
+});

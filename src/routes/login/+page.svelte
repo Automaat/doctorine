@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { HeartPulse } from 'lucide-svelte';
-	import type { ActionData } from './$types';
+	import { OIDC_LOGIN_PATH } from '$lib/oidc';
+	import type { ActionData, PageData } from './$types';
 
-	let { form }: { form: ActionData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let submitting = $state(false);
 </script>
 
@@ -55,13 +56,26 @@
 				<span>Remember me</span>
 			</label>
 
-			{#if form?.error}
-				<div class="rounded-md bg-error-100 p-3 text-sm text-error-900">{form.error}</div>
+			{#if form?.error ?? data.oidcError}
+				<div role="alert" class="rounded-md bg-error-100 p-3 text-sm text-error-900">
+					{form?.error ?? data.oidcError}
+				</div>
 			{/if}
 
 			<button type="submit" class="btn preset-filled-primary-500 w-full" disabled={submitting}>
 				{submitting ? 'Logging in...' : 'Login'}
 			</button>
 		</form>
+
+		{#if data.oidcEnabled}
+			<div class="flex items-center gap-3 text-xs text-surface-600">
+				<span class="h-px flex-1 bg-surface-200"></span>
+				<span>or</span>
+				<span class="h-px flex-1 bg-surface-200"></span>
+			</div>
+			<a href={OIDC_LOGIN_PATH} class="btn preset-tonal-primary-500 w-full" data-sveltekit-reload>
+				Sign in with Authelia
+			</a>
+		{/if}
 	</div>
 </div>

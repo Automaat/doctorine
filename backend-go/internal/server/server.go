@@ -32,6 +32,7 @@ type Config struct {
 	CookieSecure bool
 	UploadDir    string
 	WebhookURL   string
+	OIDC         *auth.OIDCConfig
 }
 
 type Deps struct {
@@ -103,6 +104,11 @@ func registerRoutes(r chi.Router, cfg Config, pool *pgxpool.Pool, logger *slog.L
 
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
+
+	oidcHandler := auth.NewOIDCHandler(cfg.OIDC, authHandler)
+	r.Get("/api/auth/oidc/status", oidcHandler.Status)
+	r.Get("/api/auth/oidc/login", oidcHandler.Login)
+	r.Get("/api/auth/oidc/callback", oidcHandler.Callback)
 
 	drain := func(context.Context) {}
 	testOrderStore := testorders.NewStore(pool)

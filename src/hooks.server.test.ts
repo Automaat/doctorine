@@ -46,3 +46,43 @@ describe('handle api auth gate', () => {
 		expect(res.status).toBe(401);
 	});
 });
+
+describe('handle oidc endpoints', () => {
+	function oidcEvent(path: string, cookie?: string) {
+		const url = new URL(`http://frontend.test${path}`);
+		return {
+			url,
+			cookies: { get: () => cookie, delete: vi.fn() },
+			request: new Request(url),
+			locals: {} as App.Locals
+		};
+	}
+
+	it.each(['/api/auth/oidc/status', '/api/auth/oidc/login', '/api/auth/oidc/callback'])(
+		'lets %s through without a session',
+		async (path) => {
+			const event = oidcEvent(path);
+			const resolve = vi.fn().mockResolvedValue(new Response(null, { status: 302 }));
+			const res = await handle({ event, resolve } as unknown as Parameters<typeof handle>[0]);
+			expect(resolve).toHaveBeenCalledOnce();
+			expect(res.status).toBe(302);
+		}
+	);
+
+	it('keeps a stale session cookie on the callback so the new session is not deleted', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
+		try {
+			const event = oidcEvent('/api/auth/oidc/callback', 'stale-token');
+			const resolve = vi.fn().mockResolvedValue(new Response(null, { status: 302 }));
+			await handle({ event, resolve } as unknown as Parameters<typeof handle>[0]);
+			expect(resolve).toHaveBeenCalledOnce();
+			expect(event.cookies.delete).not.toHaveBeenCalled();
+
+			const other = oidcEvent('/api/auth/oidc/status', 'stale-token');
+			await handle({ event: other, resolve } as unknown as Parameters<typeof handle>[0]);
+			expect(other.cookies.delete).toHaveBeenCalledWith('doctorine_token', { path: '/' });
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+});

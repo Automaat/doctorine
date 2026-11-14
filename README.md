@@ -48,6 +48,52 @@ development database without duplicating rows.
 
 Uploads are stored under `DOCTORINE_UPLOAD_DIR`; metadata lives in Postgres.
 
+## Single Sign-On (OIDC)
+
+Optional login through Authelia (or any OIDC provider) next to the
+password login. Set all four backend variables to enable it; leave all
+unset to disable it. A partial set fails startup.
+
+| Variable                       | Example                                                 |
+| ------------------------------ | ------------------------------------------------------- |
+| `DOCTORINE_OIDC_ISSUER_URL`    | `https://auth.mskalski.dev`                             |
+| `DOCTORINE_OIDC_CLIENT_ID`     | `doctorine`                                             |
+| `DOCTORINE_OIDC_CLIENT_SECRET` | client secret registered with the provider              |
+| `DOCTORINE_OIDC_REDIRECT_URL`  | `https://doctorine.mskalski.dev/api/auth/oidc/callback` |
+
+- Flow: authorization code with PKCE (S256), `client_secret_basic`,
+  scopes `openid profile email`.
+- The ID token's `preferred_username` must exactly match an existing
+  Doctorine username. No users are created; unknown users are refused.
+- A successful login creates the same session as the password login.
+  Password login and personal access tokens keep working, so they stay
+  available as a fallback while the provider is down.
+- Provider discovery runs on first use and is retried until it
+  succeeds, so the backend starts even when the provider is down.
+- The short-lived state cookie is HMAC-signed with a key derived from
+  `DOCTORINE_JWT_SECRET` (or the client secret when that is unset).
+- The issuer URL must match the provider's `issuer` exactly (watch for
+  trailing slashes).
+
+Authelia client example:
+
+```yaml
+identity_providers:
+  oidc:
+    clients:
+      - client_id: doctorine
+        client_name: Doctorine
+        client_secret: '$pbkdf2-sha512$...'
+        redirect_uris:
+          - https://doctorine.mskalski.dev/api/auth/oidc/callback
+        scopes: [openid, profile, email]
+        response_types: [code]
+        grant_types: [authorization_code]
+        require_pkce: true
+        pkce_challenge_method: S256
+        token_endpoint_auth_method: client_secret_basic
+```
+
 ## Commands
 
 - `npm run dev`
@@ -61,7 +107,8 @@ Uploads are stored under `DOCTORINE_UPLOAD_DIR`; metadata lives in Postgres.
 
 ## Security Notes
 
-- Auth required for all `/api/*` routes except login/logout
+- Auth required for all `/api/*` routes except login/logout and the
+  `/api/auth/oidc/*` login flow
 - Session token stored in an HttpOnly cookie
 - Production compose defaults `DOCTORINE_COOKIE_SECURE=true`; serve behind
   HTTPS and set an `https://` `ORIGIN` so secure cookies are sent. Local

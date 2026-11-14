@@ -11,6 +11,10 @@ services:
       - DOCTORINE_ADMIN_PASSWORD=${DOCTORINE_ADMIN_PASSWORD:?DOCTORINE_ADMIN_PASSWORD must be set}
       - DOCTORINE_COOKIE_SECURE=${DOCTORINE_COOKIE_SECURE:-true}
       - DOCTORINE_UPLOAD_DIR=/data/uploads
+      - DOCTORINE_OIDC_ISSUER_URL=${DOCTORINE_OIDC_ISSUER_URL:-}
+      - DOCTORINE_OIDC_CLIENT_ID=${DOCTORINE_OIDC_CLIENT_ID:-}
+      - DOCTORINE_OIDC_CLIENT_SECRET=${DOCTORINE_OIDC_CLIENT_SECRET:-}
+      - DOCTORINE_OIDC_REDIRECT_URL=${DOCTORINE_OIDC_REDIRECT_URL:-}
     # No host port: the frontend reaches the API over the Compose network
     # (http://backend-go:8000). For host debugging use docker-compose.debug.yml.
     volumes:

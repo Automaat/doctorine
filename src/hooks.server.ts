@@ -47,6 +47,14 @@ async function resolveUser(token: string): Promise<AuthResult> {
 	}
 }
 
+const publicApiPaths = new Set([
+	'/api/auth/login',
+	'/api/auth/logout',
+	'/api/auth/oidc/status',
+	'/api/auth/oidc/login',
+	'/api/auth/oidc/callback'
+]);
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 	const isAsset = pathname.startsWith('/_app/') || /\.\w+$/.test(pathname);
@@ -59,13 +67,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Only discard the cookie when the backend says the session is invalid;
 	// keep it on a transient backend error so users are not logged out by a blip.
-	if (token && !isAsset && auth?.status === 'invalid') {
+	// The OIDC callback sets a fresh session cookie itself; a delete appended
+	// here would land after it and log the user straight back out.
+	const isOIDCCallback = pathname === '/api/auth/oidc/callback';
+	if (token && !isAsset && !isOIDCCallback && auth?.status === 'invalid') {
 		event.cookies.delete('doctorine_token', { path: '/' });
 	}
 
 	const isLogin = pathname === '/login';
-	const isPublicApi = pathname === '/api/auth/login' || pathname === '/api/auth/logout';
-	if (isAsset || isLogin || isPublicApi) return resolve(event);
+	if (isAsset || isLogin || publicApiPaths.has(pathname)) return resolve(event);
 
 	if (pathname.startsWith('/api/')) {
 		// A service may authenticate with a personal access token via a Bearer
